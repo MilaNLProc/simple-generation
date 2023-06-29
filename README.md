@@ -34,3 +34,5 @@ texts = [
 ]
 responses = gen(texts, max_new_tokens=128, do_sample=False, num_beams=4)
 ```
+
+The script will generate a `emissions.csv` file with estimated emissions.
