@@ -114,12 +114,16 @@ class SimpleGenerator:
         output_texts = list()
         for batch in tqdm(loader, desc="Generation"):
             batch = batch.to(self.model.device)
-            output = self.model.generate(
-                input_ids=batch["input_ids"],
-                attention_mask=batch["attention_mask"],
-                **current_generation_args,
-            )
-            decoded = self.tokenizer.batch_decode(output, skip_special_tokens=True)
+            try:
+                output = self.model.generate(
+                    input_ids=batch["input_ids"],
+                    attention_mask=batch["attention_mask"],
+                    **current_generation_args,
+                )
+                decoded = self.tokenizer.batch_decode(output, skip_special_tokens=True)
+            except:
+                print("Generation failed. Skipping batch.")
+                decoded = [""] * len(batch["input_ids"])
             output_texts.extend(decoded)
 
         return output_texts
