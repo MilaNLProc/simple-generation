@@ -121,7 +121,8 @@ class SimpleGenerator:
                     **current_generation_args,
                 )
                 decoded = self.tokenizer.batch_decode(output, skip_special_tokens=True)
-            except:
+            except Exception as e:
+                print("Error", e)
                 print("Generation failed. Skipping batch.")
                 decoded = [""] * len(batch["input_ids"])
             output_texts.extend(decoded)
