@@ -11,11 +11,28 @@ from tqdm import tqdm
 from datasets import Dataset
 import torch
 from codecarbon import track_emissions
+import dataclasses
 
 
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass
+class DefaultGenerationConfig(GenerationConfig):
+
+    do_sample: bool = True
+    num_beams: int = 1
+    early_stopping: bool = False
+    temperature: float = 0.75
+    top_k: int = 50
+    top_p: float = 0.95
+    typical_p: float = 1.0
+    repetition_penalty: float = 1.1
+    num_return_sequences: int = 1
+    penalty_alpha: float = 0.2
+    length_penalty: int = 1.2
 
 
 class SimpleGenerator:
@@ -62,15 +79,15 @@ class SimpleGenerator:
             "load_in_4bit": load_in_4bit,
         }
 
-        self.model = model_cls.from_pretrained(model_name_or_path, **model_args).eval()
-
         try:
             self.generation_config = GenerationConfig.from_pretrained(
                 model_name_or_path
             )
         except Exception as e:
             logger.warning("Could not load generation config. Using default one.")
-            self.generation_config = GenerationConfig()
+            self.generation_config = DefaultGenerationConfig()
+
+        self.model = model_cls.from_pretrained(model_name_or_path, **model_args).eval()
 
     @track_emissions
     @torch.no_grad()
