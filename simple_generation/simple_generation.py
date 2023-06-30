@@ -192,6 +192,6 @@ class SimpleGenerator:
 
         # remove initial text prompt form responses
         if not return_full_text:
-            responses = [r.split(texts[i])[-1] for i, r in enumerate(responses)]
+            responses = [r.split(texts[i])[-1].strip() for i, r in enumerate(responses)]
 
         return responses
