@@ -109,6 +109,9 @@ class SimpleGenerator:
         return_full_text=True,
         **generation_kwargs,
     ):
+        if not isinstance(texts, list):
+            logger.debug("Texts is not a list. Wrapping it in a list.")
+            texts = [texts]
 
         if prefix:
             logger.info("Prefix is set. Adding it to each text.")
