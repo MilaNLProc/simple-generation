@@ -48,7 +48,7 @@ responses = gen(texts, max_new_tokens=128, do_sample=False, num_beams=4)
 
 The script will generate a `emissions.csv` file with estimated emissions.
 
-### More Complex Example
+### LoRA example
 
 ```python
 gen = SimpleGenerator(
@@ -71,6 +71,22 @@ This code will, in sequence:
 - load a base llama model in 8bit
 - attach Alpaca LoRA weights to it
 - run inference on the given texts finding the largest batch size fitting the available resources
+
+### Prefix example
+
+```python
+responses = gen(
+    texts,
+    prefix="Translate English to Spanish:",
+    max_new_tokens=256,
+    do_sample=False,
+    num_beams=1,
+    top_k=50,
+    batch_size="auto",
+)
+```
+
+If you specify a `prefix`, it will be automatically appended to every input text.
 
 ## Warning
 

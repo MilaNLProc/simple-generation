@@ -105,14 +105,13 @@ class SimpleGenerator:
         texts,
         batch_size="auto",
         prefix=None,
-        prefix_sep=" ",
         num_workers=4,
         **generation_kwargs,
     ):
 
         if prefix:
             logger.info("Prefix is set. Adding it to each text.")
-            texts = [f"{prefix}{prefix_sep}{text}" for text in texts]
+            texts = [f"{prefix}{text}" for text in texts]
 
         current_generation_args = self.generation_config.to_dict()
 
