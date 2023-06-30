@@ -12,7 +12,7 @@ from datasets import Dataset
 import torch
 from codecarbon import track_emissions
 import dataclasses
-
+from peft import PeftModel
 from accelerate.utils import find_executable_batch_size
 
 
@@ -41,6 +41,7 @@ class SimpleGenerator:
     def __init__(
         self,
         model_name_or_path,
+        lora_weights=None,
         tokenizer_name_or_path=None,
         device_map="auto",
         load_in_8bit=False,
@@ -89,7 +90,13 @@ class SimpleGenerator:
             logger.warning("Could not load generation config. Using default one.")
             self.generation_config = DefaultGenerationConfig()
 
-        self.model = model_cls.from_pretrained(model_name_or_path, **model_args).eval()
+        self.model = model_cls.from_pretrained(model_name_or_path, **model_args)
+
+        if lora_weights:
+            logger.info("Attaching LoRA weights to the model")
+            self.model = PeftModel.from_pretrained(self.model, lora_weights)
+
+        self.model.eval()
 
     @track_emissions
     @torch.no_grad()

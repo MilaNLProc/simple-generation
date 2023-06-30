@@ -14,6 +14,7 @@ requirements = [
     "transformers>=4.30.2",
     "accelerate>=0.20.3",
     "datasets>=2.12.0",
+    "peft>=0.3.0",
     "bitsandbytes>=0.39.1",
     "pyopenssl>=23.2.0",
     "tqdm",
