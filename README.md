@@ -19,6 +19,7 @@ This is mainly for personal use.
 - load and attach LoRA weights
 - auto find a good batch size
 - auto find the best device placement for speed
+- make emission tracking optional and logs less invasive
 
 ## Install
 
