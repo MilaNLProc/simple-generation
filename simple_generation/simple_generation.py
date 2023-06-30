@@ -63,9 +63,17 @@ class SimpleGenerator:
         }
 
         self.model = model_cls.from_pretrained(model_name_or_path, **model_args).eval()
-        self.generation_config = GenerationConfig.from_pretrained(model_name_or_path)
+
+        try:
+            self.generation_config = GenerationConfig.from_pretrained(
+                model_name_or_path
+            )
+        except Exception as e:
+            logger.warning("Could not load generation config. Using default one.")
+            self.generation_config = GenerationConfig()
 
     @track_emissions
+    @torch.no_grad()
     def __call__(
         self,
         texts,
@@ -126,7 +134,11 @@ class SimpleGenerator:
                     **current_generation_args,
                 )
                 decoded = self.tokenizer.batch_decode(output, skip_special_tokens=True)
+
             except Exception as e:
+                if isinstance(e, torch.cuda.OutOfMemoryError):
+                    raise e
+
                 logger.error("Error", e)
                 logger.error("Generation failed. Skipping batch.")
                 decoded = [""] * len(batch["input_ids"])
