@@ -106,6 +106,7 @@ class SimpleGenerator:
         batch_size="auto",
         prefix=None,
         num_workers=4,
+        return_full_text=True,
         **generation_kwargs,
     ):
 
@@ -182,6 +183,12 @@ class SimpleGenerator:
 
         if batch_size == "auto":
             logger.info(f"Finding the optimal batch size... Starting with 128")
-            return find_batch_size_loop()
+            responses = find_batch_size_loop()
         else:
-            return base_loop(batch_size)
+            responses = base_loop(batch_size)
+
+        # remove initial text prompt form responses
+        if not return_full_text:
+            responses = [r.split(texts[i])[-1] for i, r in enumerate(responses)]
+
+        return responses

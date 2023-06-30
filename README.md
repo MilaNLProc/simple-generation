@@ -13,7 +13,8 @@ This is mainly for personal use and for simple hardware setups (ideally, single-
 - loading models with 8bit or 4bit quantization 
 - carbon emission estimates using `codecarbon`
 - auto gpus placement and inference
-- prefix addition
+- prefix addition (`prefix=`)
+- return only the generated text (`return_full_text=False`)
 
 ### WIP
 
@@ -37,7 +38,7 @@ pip install git+https://github.com/g8a9/simple-generation.git
 from simple_generation import SimpleGenerator
 
 model_name = "google/flan-t5-xxl"
-gen = SimpleGenerator(model_name, load_in_4bit=True)
+gen = SimpleGenerator(model_name, load_in_8bit=True)
 
 texts = [
     "Today is a great day to run a bit. Translate this to Spanish?",
