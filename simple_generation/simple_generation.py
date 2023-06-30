@@ -13,6 +13,11 @@ import torch
 from codecarbon import track_emissions
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 class SimpleGenerator:
     def __init__(
         self,
@@ -25,7 +30,7 @@ class SimpleGenerator:
         config = AutoConfig.from_pretrained(model_name_or_path)
         is_encoder_decoder = getattr(config, "is_encoder_decoder", None)
         if is_encoder_decoder == None:
-            print(
+            logger.warning(
                 "Could not find 'is_encoder_decoder' in the model config. Assuming it's a seq2seq model."
             )
             is_encoder_decoder = False
@@ -46,7 +51,7 @@ class SimpleGenerator:
         )
 
         if not getattr(self.tokenizer, "pad_token", None):
-            print(
+            logger.warning(
                 "Couldn't find a PAD token in the tokenizer, using the EOS token instead."
             )
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -72,27 +77,27 @@ class SimpleGenerator:
     ):
 
         if prefix:
-            print("Prefix is set. Adding it to each text.")
+            logger.info("Prefix is set. Adding it to each text.")
             texts = [f"{prefix}{prefix_sep}{text}" for text in texts]
 
         current_generation_args = self.generation_config.to_dict()
 
-        print("Setting pad_token_id to eos_token_id for open-end generation")
+        logger.info("Setting pad_token_id to eos_token_id for open-end generation")
         current_generation_args["pad_token_id"] = self.tokenizer.eos_token_id
         current_generation_args["eos_token_id"] = self.tokenizer.eos_token_id
 
-        print("Using the new 'max_new_tokens' parameter")
+        logger.info("Using the new 'max_new_tokens' parameter")
         current_generation_args["max_new_tokens"] = current_generation_args.pop(
             "max_length", 20
         )
 
         if len(generation_kwargs) > 0:
-            print(
+            logger.info(
                 "Custom generation args passed. Any named parameters will override the same default one."
             )
             current_generation_args.update(generation_kwargs)
 
-        print("Generation args:", current_generation_args)
+        logger.info("Generation args:", current_generation_args)
 
         dataset = Dataset.from_dict({"text": texts})
         dataset = dataset.map(
@@ -122,8 +127,8 @@ class SimpleGenerator:
                 )
                 decoded = self.tokenizer.batch_decode(output, skip_special_tokens=True)
             except Exception as e:
-                print("Error", e)
-                print("Generation failed. Skipping batch.")
+                logger.error("Error", e)
+                logger.error("Generation failed. Skipping batch.")
                 decoded = [""] * len(batch["input_ids"])
             output_texts.extend(decoded)
 
