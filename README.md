@@ -7,19 +7,23 @@ This is mainly for personal use.
 ## Features
 
 - any model that can be loaded with `AutoModelForCausalLM` or `AutoModelForSeq2SeqLM`
-- loading with 8bit or 4bit quantization
-- batched inference using `datasets` and `tqdm`
+- batched inference for speed
+- auto find best batch size
+- loading models with 8bit or 4bit quantization 
 - carbon emission estimates using `codecarbon`
 - auto gpus placement and inference
 - prefix addition
-- only torch checkpoints are supported
 
 ### WIP
 
 - load and attach LoRA weights
-- auto find a good batch size
 - auto find the best device placement for speed
 - make emission tracking optional and logs less invasive
+
+### What Is Not Supported
+
+- Frameworks other than torch
+- Models not in the Huggingface Hub
 
 ## Install
 

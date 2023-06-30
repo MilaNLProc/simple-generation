@@ -13,6 +13,8 @@ import torch
 from codecarbon import track_emissions
 import dataclasses
 
+from accelerate.utils import find_executable_batch_size
+
 
 import logging
 
@@ -94,9 +96,9 @@ class SimpleGenerator:
     def __call__(
         self,
         texts,
+        batch_size="auto",
         prefix=None,
         prefix_sep=" ",
-        batch_size=2,
         num_workers=4,
         **generation_kwargs,
     ):
@@ -133,32 +135,47 @@ class SimpleGenerator:
             self.tokenizer, pad_to_multiple_of=8, return_tensors="pt"
         )
 
-        loader = torch.utils.data.DataLoader(
-            dataset,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            collate_fn=collator,
-            pin_memory=True,
-        )
+        def base_loop(batch_size):
+            """Base loop for generation."""
 
-        output_texts = list()
-        for batch in tqdm(loader, desc="Generation"):
-            batch = batch.to(self.model.device)
-            try:
-                output = self.model.generate(
-                    input_ids=batch["input_ids"],
-                    attention_mask=batch["attention_mask"],
-                    **current_generation_args,
-                )
-                decoded = self.tokenizer.batch_decode(output, skip_special_tokens=True)
+            loader = torch.utils.data.DataLoader(
+                dataset,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                collate_fn=collator,
+                pin_memory=True,
+            )
 
-            except Exception as e:
-                if isinstance(e, torch.cuda.OutOfMemoryError):
-                    raise e
+            output_texts = list()
+            for batch in tqdm(loader, desc="Generation"):
+                batch = batch.to(self.model.device)
+                try:
+                    output = self.model.generate(
+                        input_ids=batch["input_ids"],
+                        attention_mask=batch["attention_mask"],
+                        **current_generation_args,
+                    )
+                    decoded = self.tokenizer.batch_decode(
+                        output, skip_special_tokens=True
+                    )
 
-                logger.error("Error", e)
-                logger.error("Generation failed. Skipping batch.")
-                decoded = [""] * len(batch["input_ids"])
-            output_texts.extend(decoded)
+                except Exception as e:
+                    if isinstance(e, torch.cuda.OutOfMemoryError):
+                        raise e
 
-        return output_texts
+                    logger.error("Error", e)
+                    logger.error("Generation failed. Skipping batch.")
+                    decoded = [""] * len(batch["input_ids"])
+                output_texts.extend(decoded)
+
+            return output_texts
+
+        @find_executable_batch_size(starting_batch_size=128)
+        def find_batch_size_loop(batch_size):
+            return base_loop(batch_size)
+
+        if batch_size == "auto":
+            logger.info(f"Finding the optimal batch size... Starting with 128")
+            return find_batch_size_loop()
+        else:
+            return base_loop(batch_size)
