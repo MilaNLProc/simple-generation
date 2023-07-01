@@ -23,7 +23,10 @@ logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class DefaultGenerationConfig(GenerationConfig):
+    """Default generation config.
 
+    We apply this parameters to any .generate() call, unless they are not overridden.
+    """
     do_sample: bool = True
     num_beams: int = 1
     early_stopping: bool = False

@@ -89,6 +89,31 @@ responses = gen(
 
 If you specify a `prefix`, it will be automatically appended to every input text.
 
+
+## Generation Defaults
+
+If not specified we set some sensible defaults for text generation. **Please note that they might not fit your use case.**
+
+```python
+@dataclasses.dataclass
+class DefaultGenerationConfig(GenerationConfig):
+    """Default generation config.
+
+    We apply this parameters to any .generate() call, unless they are not overridden.
+    """
+    do_sample: bool = True
+    num_beams: int = 1
+    early_stopping: bool = False
+    temperature: float = 0.75
+    top_k: int = 50
+    top_p: float = 0.95
+    typical_p: float = 1.0
+    repetition_penalty: float = 1.1
+    num_return_sequences: int = 1
+    penalty_alpha: float = 0.2
+    length_penalty: int = 1.2
+```
+
 ## Warning
 
 There seem to be instabilities while using 4bit quantization (not related to this library). Use it only if strictly necessary.
