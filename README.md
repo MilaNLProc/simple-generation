@@ -7,12 +7,13 @@ This is mainly for personal use and for simple hardware setups (ideally, single-
 ## Features
 
 - any model that can be loaded with `AutoModelForCausalLM` or `AutoModelForSeq2SeqLM`
-- batched inference for speed
+- batched inference for speed (`batch_size=...`)
 - auto find best batch size
-- torch.compile the model (`compile_model=True`)
+- torch.compile the model for speed (`compile_model=True`)
 - load and attach LoRA weights
 - loading models with 8bit or 4bit quantization 
 - carbon emission estimates using `codecarbon`
+- sparsity and fused kernels for speed with `optimum` (`use_bettertransformer=True`)
 - auto gpus placement and inference
 - prefix addition (`prefix=`)
 - return only the generated text (`return_full_text=False`)

@@ -49,7 +49,8 @@ class SimpleGenerator:
         device_map="auto",
         load_in_8bit=False,
         load_in_4bit=False,
-        compile_model=False
+        compile_model=False,
+        use_bettertransformer=False
     ):
         config = AutoConfig.from_pretrained(model_name_or_path)
         is_encoder_decoder = getattr(config, "is_encoder_decoder", None)
@@ -99,6 +100,16 @@ class SimpleGenerator:
         if lora_weights:
             logger.info("Attaching LoRA weights to the model")
             self.model = PeftModel.from_pretrained(self.model, lora_weights)
+
+
+        if use_bettertransformer:
+            logger.info("Transforming model with bettertransformer")
+            try:
+                from optimum.bettertransformer import BetterTransformer
+                self.model = BetterTransformer.transform(self.model)
+            except Exception as e:
+                print(e)
+                logger.error("Couldn't transformer the model with BetterTransformers")
 
         if compile_model:
             logger.info("torch.compiling the model")
@@ -192,7 +203,7 @@ class SimpleGenerator:
 
             return output_texts
 
-        @find_executable_batch_size(starting_batch_size=128)
+        @find_executable_batch_size(starting_batch_size=512)
         def find_batch_size_loop(batch_size):
             print(f"Auto finding batch size... Testing bs={batch_size}")
             return base_loop(batch_size)

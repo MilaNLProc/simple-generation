@@ -17,6 +17,7 @@ requirements = [
     "peft>=0.3.0",
     "bitsandbytes>=0.39.1",
     "pyopenssl>=23.2.0",
+    "optimum>=1.9.0",
     "tqdm",
     "codecarbon",
 ]
