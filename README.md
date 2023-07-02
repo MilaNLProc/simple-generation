@@ -2,13 +2,14 @@
 
 Simple Generator offers a minimal interface to text generation with hugginface models. The core idea is to ship many neat features out of the box and avoid boilerplate code.
 
-This is mainly for personal use and for simple hardware setups (ideally, single-gp).
+This is mainly for personal use and for simple hardware setups (ideally, single-node single- or multi-gpu).
 
 ## Features
 
 - any model that can be loaded with `AutoModelForCausalLM` or `AutoModelForSeq2SeqLM`
 - batched inference for speed
 - auto find best batch size
+- torch.compile the model (`compile_model=True`)
 - load and attach LoRA weights
 - loading models with 8bit or 4bit quantization 
 - carbon emission estimates using `codecarbon`

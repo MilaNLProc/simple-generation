@@ -49,6 +49,7 @@ class SimpleGenerator:
         device_map="auto",
         load_in_8bit=False,
         load_in_4bit=False,
+        compile_model=False
     ):
         config = AutoConfig.from_pretrained(model_name_or_path)
         is_encoder_decoder = getattr(config, "is_encoder_decoder", None)
@@ -98,6 +99,14 @@ class SimpleGenerator:
         if lora_weights:
             logger.info("Attaching LoRA weights to the model")
             self.model = PeftModel.from_pretrained(self.model, lora_weights)
+
+        if compile_model:
+            logger.info("torch.compiling the model")
+            try:
+                self.model = torch.compile(self.model)
+            except Exception as e:
+                print(e)
+                logger.error("Couldn't torch.compile the model. Check that your torch version is >=2.*")
 
         self.model.eval()
 
@@ -185,6 +194,7 @@ class SimpleGenerator:
 
         @find_executable_batch_size(starting_batch_size=128)
         def find_batch_size_loop(batch_size):
+            print(f"Auto finding batch size... Testing bs={batch_size}")
             return base_loop(batch_size)
 
         if batch_size == "auto":
