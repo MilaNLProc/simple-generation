@@ -27,6 +27,7 @@ class DefaultGenerationConfig(GenerationConfig):
 
     We apply this parameters to any .generate() call, unless they are not overridden.
     """
+
     do_sample: bool = True
     num_beams: int = 1
     early_stopping: bool = False
@@ -50,7 +51,7 @@ class SimpleGenerator:
         load_in_8bit=False,
         load_in_4bit=False,
         compile_model=False,
-        use_bettertransformer=False
+        use_bettertransformer=False,
     ):
         config = AutoConfig.from_pretrained(model_name_or_path)
         is_encoder_decoder = getattr(config, "is_encoder_decoder", None)
@@ -74,6 +75,11 @@ class SimpleGenerator:
         self.tokenizer = AutoTokenizer.from_pretrained(
             tokenizer_name, padding_side="left"
         )
+
+        logger.debug("Setting off the deprecation warning for padding")
+        # see https://github.com/huggingface/transformers/issues/22638
+        # and monitor https://github.com/huggingface/transformers/pull/23742
+        self.tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
 
         if not getattr(self.tokenizer, "pad_token", None):
             logger.warning(
@@ -101,11 +107,11 @@ class SimpleGenerator:
             logger.info("Attaching LoRA weights to the model")
             self.model = PeftModel.from_pretrained(self.model, lora_weights)
 
-
         if use_bettertransformer:
             logger.info("Transforming model with bettertransformer")
             try:
                 from optimum.bettertransformer import BetterTransformer
+
                 self.model = BetterTransformer.transform(self.model)
             except Exception as e:
                 print(e)
@@ -117,7 +123,9 @@ class SimpleGenerator:
                 self.model = torch.compile(self.model)
             except Exception as e:
                 print(e)
-                logger.error("Couldn't torch.compile the model. Check that your torch version is >=2.*")
+                logger.error(
+                    "Couldn't torch.compile the model. Check that your torch version is >=2.*"
+                )
 
         self.model.eval()
 
