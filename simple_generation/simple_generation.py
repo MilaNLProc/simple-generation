@@ -15,7 +15,6 @@ import dataclasses
 from peft import PeftModel
 from accelerate.utils import find_executable_batch_size
 
-
 import logging
 
 logger = logging.getLogger(__name__)
@@ -39,6 +38,7 @@ class DefaultGenerationConfig(GenerationConfig):
     num_return_sequences: int = 1
     penalty_alpha: float = 0.2
     length_penalty: int = 1.2
+    max_new_tokens: int = 512
 
 
 class SimpleGenerator:
@@ -87,12 +87,6 @@ class SimpleGenerator:
             )
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        model_args = {
-            "device_map": device_map,
-            "load_in_8bit": load_in_8bit,
-            "load_in_4bit": load_in_4bit,
-        }
-
         try:
             self.generation_config = GenerationConfig.from_pretrained(
                 model_name_or_path
@@ -100,6 +94,12 @@ class SimpleGenerator:
         except Exception as e:
             logger.warning("Could not load generation config. Using default one.")
             self.generation_config = DefaultGenerationConfig()
+
+        model_args = {
+            "device_map": device_map,
+            "load_in_8bit": load_in_8bit,
+            "load_in_4bit": load_in_4bit,
+        }
 
         self.model = model_cls.from_pretrained(model_name_or_path, **model_args)
 
@@ -138,6 +138,7 @@ class SimpleGenerator:
         prefix=None,
         num_workers=4,
         return_full_text=True,
+        log_batch_sample=-1,
         **generation_kwargs,
     ):
         if not isinstance(texts, list):
@@ -154,10 +155,13 @@ class SimpleGenerator:
         current_generation_args["pad_token_id"] = self.tokenizer.eos_token_id
         current_generation_args["eos_token_id"] = self.tokenizer.eos_token_id
 
-        logger.info("Using the new 'max_new_tokens' parameter")
-        current_generation_args["max_new_tokens"] = current_generation_args.pop(
-            "max_length", 20
-        )
+        if "max_length" in current_generation_args:
+            logger.warning(
+                "Using max_length is deprecated. Setting max_new_tokens instead."
+            )
+            current_generation_args["max_new_tokens"] = current_generation_args.pop(
+                "max_length"
+            )
 
         if len(generation_kwargs) > 0:
             logger.info(
@@ -188,7 +192,7 @@ class SimpleGenerator:
             )
 
             output_texts = list()
-            for batch in tqdm(loader, desc="Generation"):
+            for idx, batch in tqdm(enumerate(loader), desc="Generation"):
                 batch = batch.to(self.model.device)
                 try:
                     output = self.model.generate(
@@ -196,6 +200,11 @@ class SimpleGenerator:
                         attention_mask=batch["attention_mask"],
                         **current_generation_args,
                     )
+
+                    # remove initial text prompt form responses
+                    if not return_full_text:
+                        output = output[:, len(batch["input_ids"][0]) :]
+
                     decoded = self.tokenizer.batch_decode(
                         output, skip_special_tokens=True
                     )
@@ -207,6 +216,10 @@ class SimpleGenerator:
                     logger.error("Error", e)
                     logger.error("Generation failed. Skipping batch.")
                     decoded = [""] * len(batch["input_ids"])
+
+                if log_batch_sample != -1 and (log_batch_sample % (idx + 1) == 0):
+                    print(f"Log decoded text at batch_id {idx}", decoded[0])
+
                 output_texts.extend(decoded)
 
             return output_texts
@@ -221,9 +234,5 @@ class SimpleGenerator:
             responses = find_batch_size_loop()
         else:
             responses = base_loop(batch_size)
-
-        # remove initial text prompt form responses
-        if not return_full_text:
-            responses = [r.split(texts[i])[-1].strip() for i, r in enumerate(responses)]
 
         return responses
