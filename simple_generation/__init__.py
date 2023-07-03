@@ -5,4 +5,4 @@ __email__ = "giuseppeattanasio6@gmail.com"
 __version__ = "0.1.0"
 
 
-from .simple_generation import SimpleGenerator
+from .simple_generation import SimpleGenerator, DefaultGenerationConfig
