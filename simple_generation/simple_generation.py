@@ -121,7 +121,7 @@ class SimpleGenerator:
 
         self.model.eval()
 
-    @track_emissions
+    @track_emissions(log_level="warning")
     @torch.no_grad()
     def __call__(
         self,

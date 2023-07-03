@@ -21,7 +21,6 @@ This is mainly for personal use and for simple hardware setups (ideally, single-
 ### WIP
 
 - auto find the best device placement for speed
-- make emission tracking optional and logs less invasive
 
 ### What Is Not Supported
 
