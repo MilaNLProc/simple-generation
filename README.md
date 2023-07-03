@@ -17,6 +17,7 @@ This is mainly for personal use and for simple hardware setups (ideally, single-
 - auto gpus placement and inference
 - prefix addition (`prefix=`)
 - return only the generated text (`return_full_text=False`)
+- periodic logging of decoded samples (`log_batch_sample=`)
 
 ### WIP
 

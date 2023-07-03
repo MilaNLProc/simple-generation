@@ -100,7 +100,6 @@ class SimpleGenerator:
             "load_in_8bit": load_in_8bit,
             "load_in_4bit": load_in_4bit,
         }
-
         self.model = model_cls.from_pretrained(model_name_or_path, **model_args)
 
         if lora_weights:
@@ -192,7 +191,9 @@ class SimpleGenerator:
             )
 
             output_texts = list()
-            for idx, batch in tqdm(enumerate(loader), desc="Generation"):
+            for idx, batch in tqdm(
+                enumerate(loader), desc="Generation", total=len(loader)
+            ):
                 batch = batch.to(self.model.device)
                 try:
                     output = self.model.generate(
