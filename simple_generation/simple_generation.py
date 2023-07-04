@@ -134,7 +134,7 @@ class SimpleGenerator:
         self.model.eval()
 
     @track_emissions(log_level="warning", measure_power_secs=60)
-    @inference_decorator
+    @inference_decorator()
     def __call__(
         self,
         texts,
