@@ -52,13 +52,15 @@ class SimpleGenerator:
         model_name_or_path,
         lora_weights=None,
         tokenizer_name_or_path=None,
-        device_map="auto",
-        load_in_8bit=False,
-        load_in_4bit=False,
         compile_model=False,
         use_bettertransformer=False,
+        **model_kwargs,
     ):
-        config = AutoConfig.from_pretrained(model_name_or_path)
+        trust_remote_code = model_kwargs.get("trust_remote_code", False)
+
+        config = AutoConfig.from_pretrained(
+            model_name_or_path, trust_remote_code=trust_remote_code
+        )
         is_encoder_decoder = getattr(config, "is_encoder_decoder", None)
         if is_encoder_decoder == None:
             logger.warning(
@@ -70,9 +72,6 @@ class SimpleGenerator:
             model_cls = AutoModelForSeq2SeqLM
         else:
             model_cls = AutoModelForCausalLM
-
-        if load_in_4bit and load_in_8bit:
-            raise ValueError("Cannot load in both 4bit and 8bit")
 
         tokenizer_name = (
             tokenizer_name_or_path if tokenizer_name_or_path else model_name_or_path
@@ -100,12 +99,11 @@ class SimpleGenerator:
             logger.warning("Could not load generation config. Using default one.")
             self.generation_config = DefaultGenerationConfig()
 
-        model_args = {
-            "device_map": device_map,
-            "load_in_8bit": load_in_8bit,
-            "load_in_4bit": load_in_4bit,
-        }
-        self.model = model_cls.from_pretrained(model_name_or_path, **model_args)
+        # setting some model kwargs by default
+        if "device_map" not in model_kwargs:
+            model_kwargs["device_map"] = "auto"
+
+        self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
 
         if lora_weights:
             logger.info("Attaching LoRA weights to the model")
