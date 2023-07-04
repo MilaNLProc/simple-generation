@@ -20,6 +20,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+inference_decorator = (
+    torch.inference_mode if torch.__version__ >= "2.0.0" else torch.no_grad
+)
+
+
 @dataclasses.dataclass
 class DefaultGenerationConfig(GenerationConfig):
     """Default generation config.
@@ -128,12 +133,13 @@ class SimpleGenerator:
 
         self.model.eval()
 
-    @track_emissions(log_level="warning")
-    @torch.no_grad()
+    @track_emissions(log_level="warning", measure_power_secs=60)
+    @inference_decorator
     def __call__(
         self,
         texts,
         batch_size="auto",
+        starting_batch_size=256,
         prefix=None,
         num_workers=4,
         return_full_text=True,
@@ -225,13 +231,15 @@ class SimpleGenerator:
 
             return output_texts
 
-        @find_executable_batch_size(starting_batch_size=512)
+        @find_executable_batch_size(starting_batch_size=starting_batch_size)
         def find_batch_size_loop(batch_size):
             print(f"Auto finding batch size... Testing bs={batch_size}")
             return base_loop(batch_size)
 
         if batch_size == "auto":
-            logger.info(f"Finding the optimal batch size... Starting with 128")
+            logger.info(
+                f"Finding the optimal batch size... Starting with {starting_batch_size}"
+            )
             responses = find_batch_size_loop()
         else:
             responses = base_loop(batch_size)
