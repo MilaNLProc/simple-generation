@@ -119,3 +119,16 @@ class DefaultGenerationConfig(GenerationConfig):
 ## Warning
 
 There seem to be instabilities while using 4bit quantization (not related to this library). Use it only if strictly necessary.
+
+## Reference
+
+```bibtex
+@misc{milanlp-2023-simple-generation,
+  author = {Giuseppe Attanasio and The MilaNLP Group},
+  title = {{S}imple {G}eneration},
+  year = {2023},
+  publisher = {GitHub},
+  journal = {GitHub Repository},
+  howpublished = {\url{https://github.com/g8a9/simple-generation}}
+}
+```
