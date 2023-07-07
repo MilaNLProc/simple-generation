@@ -1,6 +1,6 @@
 # Simple Generation
 
-Simple Generator offers a minimal interface to text generation with hugginface models. The core idea is to ship many neat features out of the box and avoid boilerplate code.
+Simple Generator offers a minimal interface to text generation with HugginFace models. The core idea is to ship many neat features out of the box and avoid boilerplate code.
 
 This is mainly for personal use and for simple hardware setups (ideally, single-node single- or multi-gpu).
 
@@ -8,13 +8,13 @@ This is mainly for personal use and for simple hardware setups (ideally, single-
 
 - any model that can be loaded with `AutoModelForCausalLM` or `AutoModelForSeq2SeqLM`
 - batched inference for speed (`batch_size=...`)
-- auto find best batch size
+- auto find best batch size (`batch_size="auto"`)
 - torch.compile the model for speed (`compile_model=True`)
-- load and attach LoRA weights
-- loading models with 8bit or 4bit quantization 
-- carbon emission estimates using `codecarbon`
-- sparsity and fused kernels for speed with `optimum` (`use_bettertransformer=True`)
-- auto gpus placement and inference
+- load and attach LoRA weights (`lora_weights=...`)
+- loading models with 8bit or 4bit quantization (`load_in_[4|8]bit=True`)
+- carbon emission estimates using [codecarbon](https://mlco2.github.io/codecarbon/)
+- sparsity and fused kernels for speed with [optimum](https://huggingface.co/docs/optimum/main/en/index) (`use_bettertransformer=True`)
+- auto GPUs placement and inference (`device_map="auto"`)
 - prefix addition (`prefix=`)
 - return only the generated text (`return_full_text=False`)
 - periodic logging of decoded samples (`log_batch_sample=`)
