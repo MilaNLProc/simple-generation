@@ -31,7 +31,7 @@ This is mainly for personal use and for simple hardware setups (ideally, single-
 ## Install
 
 ```bash
-pip install git+https://github.com/g8a9/simple-generation.git
+pip install git+https://github.com/MilaNLProc/simple-generation.git
 ```
 
 ## Minimal Example
