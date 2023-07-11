@@ -22,6 +22,7 @@ This is mainly for personal use and for simple hardware setups (ideally, single-
 ### WIP
 
 - auto find the best device placement for speed
+- efficient duplicate and quasi-duplicate removal
 
 ### What Is Not Supported
 
