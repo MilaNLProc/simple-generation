@@ -1,21 +1,21 @@
 """Main module."""
+import dataclasses
+import logging
+
+import torch
+from accelerate.utils import find_executable_batch_size
+from codecarbon import track_emissions
+from datasets import Dataset
+from peft import PeftModel
+from tqdm import tqdm
 from transformers import (
+    AutoConfig,
     AutoModelForCausalLM,
     AutoModelForSeq2SeqLM,
     AutoTokenizer,
     DataCollatorWithPadding,
     GenerationConfig,
-    AutoConfig,
 )
-from tqdm import tqdm
-from datasets import Dataset
-import torch
-from codecarbon import track_emissions
-import dataclasses
-from peft import PeftModel
-from accelerate.utils import find_executable_batch_size
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -101,9 +101,15 @@ class SimpleGenerator:
 
         # setting some model kwargs by default
         if "device_map" not in model_kwargs:
+            logger.debug("Setting the device map to 'auto' since not specified")
             model_kwargs["device_map"] = "auto"
 
-        self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
+        try:
+            self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
+        except:
+            model_kwargs.pop("device_map")
+            logger.debug("Removig device_map and trying loading model again")
+            self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
 
         if lora_weights:
             logger.info("Attaching LoRA weights to the model")
