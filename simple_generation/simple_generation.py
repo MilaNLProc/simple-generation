@@ -58,15 +58,24 @@ class SimpleGenerator:
     ):
         trust_remote_code = model_kwargs.get("trust_remote_code", False)
 
-        config = AutoConfig.from_pretrained(
-            model_name_or_path, trust_remote_code=trust_remote_code
-        )
-        is_encoder_decoder = getattr(config, "is_encoder_decoder", None)
-        if is_encoder_decoder == None:
+        # Load config and inspect whether the model is a seq2seq or causal LM
+        try:
+            config = AutoConfig.from_pretrained(
+                model_name_or_path, trust_remote_code=trust_remote_code
+            )
+            is_encoder_decoder = getattr(config, "is_encoder_decoder", None)
+            if is_encoder_decoder == None:
+                logger.warning(
+                    "Could not find 'is_encoder_decoder' in the model config. Assuming it's an autoregressive model."
+                )
+                is_encoder_decoder = False
+        except:
             logger.warning(
-                "Could not find 'is_encoder_decoder' in the model config. Assuming it's a seq2seq model."
+                f"Could not find config in {model_name_or_path}. Assuming it's an autoregressive model."
             )
             is_encoder_decoder = False
+
+        self.is_encoder_decoder = is_encoder_decoder
 
         if is_encoder_decoder:
             model_cls = AutoModelForSeq2SeqLM
