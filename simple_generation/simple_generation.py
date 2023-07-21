@@ -16,6 +16,7 @@ from transformers import (
     DataCollatorWithPadding,
     GenerationConfig,
 )
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +155,44 @@ class SimpleGenerator:
 
         self.model.eval()
 
+    def multi_turn(
+        self,
+        turn_texts: List[str],
+        user_prefix: str = "User: ",
+        machine_prefix: str = "Assistant: ",
+        user_machine_separator: str = "\n",
+        turn_separator: str = "\n\n",
+        **kwargs,
+    ):
+        """Generate a multi-turn conversation.
+
+        Args:
+            turn_texts (List[str]): A list of turn texts. Each element is the human written text for a turn.
+            user_prefix (str, optional): The prefix to add to the user text. Defaults to "User: ".
+            machine_prefix (str, optional): The prefix to add to the machine text. Defaults to "Assistant: ".
+            user_machine_separator (str, optional): The separator between the user and machine text. Defaults to "\n".
+            turn_separator (str, optional): The separator between each turn. Defaults to "\n\n".
+
+        Returns:
+            str: The generated conversation.
+        """
+
+        history = ""
+        for turn_text in tqdm(turn_texts, desc="Turns"):
+            query = (
+                history
+                + user_prefix
+                + turn_text
+                + user_machine_separator
+                + machine_prefix
+            )
+            response = self(
+                query, return_full_text=False, show_progress_bar=False, **kwargs
+            )[0]
+            history = query + response + turn_separator
+
+        return history
+
     @track_emissions(log_level="warning", measure_power_secs=60)
     @inference_decorator()
     def __call__(
@@ -165,6 +204,7 @@ class SimpleGenerator:
         num_workers=4,
         return_full_text=True,
         log_batch_sample=-1,
+        show_progress_bar=True,
         **generation_kwargs,
     ):
         if not isinstance(texts, list):
@@ -219,7 +259,10 @@ class SimpleGenerator:
 
             output_texts = list()
             for idx, batch in tqdm(
-                enumerate(loader), desc="Generation", total=len(loader)
+                enumerate(loader),
+                desc="Generation",
+                total=len(loader),
+                disable=not show_progress_bar,
             ):
                 batch = batch.to(self.model.device)
                 try:

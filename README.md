@@ -130,6 +130,6 @@ There seem to be instabilities while using 4bit quantization (not related to thi
   year = {2023},
   publisher = {GitHub},
   journal = {GitHub Repository},
-  howpublished = {\url{https://github.com/g8a9/simple-generation}}
+  howpublished = {\url{https://github.com/MilaNLProc/simple-generation}}
 }
 ```
