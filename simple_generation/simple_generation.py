@@ -162,6 +162,7 @@ class SimpleGenerator:
         machine_prefix: str = "Assistant: ",
         user_machine_separator: str = "\n",
         turn_separator: str = "\n\n",
+        return_last_response: bool = False,
         **kwargs,
     ):
         """Generate a multi-turn conversation.
@@ -191,7 +192,11 @@ class SimpleGenerator:
             )[0]
             history = query + response + turn_separator
 
-        return history
+        out = history
+        if return_last_response:
+            out = (history, response)
+
+        return out
 
     @track_emissions(log_level="warning", measure_power_secs=60)
     @inference_decorator()
