@@ -59,16 +59,24 @@ class SimpleGenerator:
         trust_remote_code = model_kwargs.get("trust_remote_code", False)
 
         # Load config and inspect whether the model is a seq2seq or causal LM
+        config = None
         try:
             config = AutoConfig.from_pretrained(
                 model_name_or_path, trust_remote_code=trust_remote_code
             )
+
+            if config.architectures == "LLaMAForCausalLM":
+                config.architectures == "LlamaForCausalLM"
+
             is_encoder_decoder = getattr(config, "is_encoder_decoder", None)
             if is_encoder_decoder == None:
                 logger.warning(
                     "Could not find 'is_encoder_decoder' in the model config. Assuming it's an autoregressive model."
                 )
                 is_encoder_decoder = False
+
+            model_kwargs["config"] = config
+
         except:
             logger.warning(
                 f"Could not find config in {model_name_or_path}. Assuming it's an autoregressive model."
@@ -86,7 +94,7 @@ class SimpleGenerator:
             tokenizer_name_or_path if tokenizer_name_or_path else model_name_or_path
         )
         self.tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_name, padding_side="left"
+            tokenizer_name, padding_side="left", config=config
         )
 
         logger.debug("Setting off the deprecation warning for padding")
