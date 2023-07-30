@@ -15,7 +15,6 @@ This is mainly for personal use and for simple hardware setups (ideally, single-
 - carbon emission estimates using [codecarbon](https://mlco2.github.io/codecarbon/)
 - sparsity and fused kernels for speed with [optimum](https://huggingface.co/docs/optimum/main/en/index) (`use_bettertransformer=True`)
 - auto GPUs placement and inference (`device_map="auto"`)
-- prefix addition (`prefix=`)
 - return only the generated text (`return_full_text=False`)
 - periodic logging of decoded samples (`log_batch_sample=`)
 
@@ -23,6 +22,7 @@ This is mainly for personal use and for simple hardware setups (ideally, single-
 
 - auto find the best device placement for speed
 - efficient duplicate and quasi-duplicate removal
+- add system prompt chat templates (e.g., Guanaco, LLaMA, LLaMA 2)
 
 ### What Is Not Supported
 
@@ -75,22 +75,6 @@ This code will, in sequence:
 - load a base llama model in 8bit
 - attach Alpaca LoRA weights to it
 - run inference on the given texts finding the largest batch size fitting the available resources
-
-### Prefix example
-
-```python
-responses = gen(
-    texts,
-    prefix="Translate English to Spanish:",
-    max_new_tokens=256,
-    do_sample=False,
-    num_beams=1,
-    top_k=50,
-    batch_size="auto",
-)
-```
-
-If you specify a `prefix`, it will be automatically appended to every input text.
 
 
 ## Generation Defaults

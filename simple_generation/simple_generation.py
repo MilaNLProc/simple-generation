@@ -95,8 +95,11 @@ class SimpleGenerator:
             tokenizer_name_or_path if tokenizer_name_or_path else model_name_or_path
         )
         self.tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_name, padding_side="left", config=config
+            tokenizer_name, config=config, padding_side="left"
         )
+
+        # padding_size="left" is required for autoregressive models, and should not make a difference for every other model as we use attention_masks. See: https://github.com/huggingface/transformers/issues/3021#issuecomment-1454266627 for a discussion on why left padding is needed on batched inference 
+        self.tokenizer.padding_side = "left"
 
         logger.debug("Setting off the deprecation warning for padding")
         # see https://github.com/huggingface/transformers/issues/22638
@@ -205,7 +208,6 @@ class SimpleGenerator:
         texts,
         batch_size="auto",
         starting_batch_size=256,
-        prefix=None,
         num_workers=4,
         return_full_text=True,
         log_batch_sample=-1,
@@ -215,10 +217,6 @@ class SimpleGenerator:
         if not isinstance(texts, list):
             logger.debug("Texts is not a list. Wrapping it in a list.")
             texts = [texts]
-
-        if prefix:
-            logger.info("Prefix is set. Adding it to each text.")
-            texts = [f"{prefix}{text}" for text in texts]
 
         current_generation_args = self.generation_config.to_dict()
 
@@ -289,8 +287,8 @@ class SimpleGenerator:
                     if isinstance(e, torch.cuda.OutOfMemoryError):
                         raise e
 
-                    logger.error("Error", e)
-                    logger.error("Generation failed. Skipping batch.")
+                    print("Error", e)
+                    print("Generation failed. Skipping batch.")
                     decoded = [""] * len(batch["input_ids"])
 
                 if log_batch_sample != -1 and (log_batch_sample % (idx + 1) == 0):
@@ -306,7 +304,7 @@ class SimpleGenerator:
             return base_loop(batch_size)
 
         if batch_size == "auto":
-            logger.info(
+            print(
                 f"Finding the optimal batch size... Starting with {starting_batch_size}"
             )
             responses = find_batch_size_loop()
