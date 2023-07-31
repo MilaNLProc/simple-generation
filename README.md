@@ -22,7 +22,8 @@ This is mainly for personal use and for simple hardware setups (ideally, single-
 
 - auto find the best device placement for speed
 - efficient duplicate and quasi-duplicate removal
-- add system prompt chat templates (e.g., Guanaco, LLaMA, LLaMA 2)
+- support system prompt chat formatting following standard templates (e.g., Guanaco, LLaMA, LLaMA 2)
+- support auto gptq quantized models
 
 ### What Is Not Supported
 
@@ -109,7 +110,7 @@ There seem to be instabilities while using 4bit quantization (not related to thi
 
 ```bibtex
 @misc{milanlp-2023-simple-generation,
-  author = {Giuseppe Attanasio and The MilaNLP Group},
+  author = {Giuseppe Attanasio},
   title = {{S}imple {G}eneration},
   year = {2023},
   publisher = {GitHub},
