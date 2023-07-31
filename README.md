@@ -1,20 +1,52 @@
 # Simple Generation
 
-Simple Generator offers a minimal interface to text generation with HugginFace models. The core idea is to ship many neat features out of the box and avoid boilerplate code.
+Simple Generator offers a minimal interface to run text generation with HuggingFace checkpoint.
+The core idea is to ship many neat features out of the box and avoid boilerplate.
 
-This is mainly for personal use and for simple hardware setups (ideally, single-node single- or multi-gpu).
+This is mainly for personal use and simple hardware setups (ideally, single-node single- or multi-gpu). A good part of it is WIP. \\
+Moreover, please note that **the library will apply some (sensible) defaults (on where to place models, generation configuration, and so on) which might not suit your use case** and should be edited accordingly. Please head to [defaults](#defaults) to see a list of things you should be aware of.
+
+Install with:
+```bash
+pip install git+https://github.com/MilaNLProc/simple-generation.git
+```
 
 ## Features
 
 - any model that can be loaded with `AutoModelForCausalLM` or `AutoModelForSeq2SeqLM`
-- batched inference for speed (`batch_size=...`)
-- auto find best batch size (`batch_size="auto"`)
+- batched inference for speed (`batch_size=256`)
+- auto find best batch size (`batch_size="auto"`, `starting_batch_size=512`)
 - torch.compile the model for speed (`compile_model=True`)
 - load and attach LoRA weights (`lora_weights=...`)
-- loading models with 8bit or 4bit quantization (`load_in_[4|8]bit=True`)
 - carbon emission estimates using [codecarbon](https://mlco2.github.io/codecarbon/)
 - sparsity and fused kernels for speed with [optimum](https://huggingface.co/docs/optimum/main/en/index) (`use_bettertransformer=True`)
-- auto GPUs placement and inference (`device_map="auto"`)
+
+**Loading a Model**
+
+```python
+from simple_generation import SimpleGenerator
+model_name = "meta-llama/Llama-2-7b-chat-hf"
+generator = SimpleGenerator(model_name, load_in_8bit=True)
+```
+
+Any named argument to `SimpleGenerator` will be passed the `from_pretrained` HF method. For example, you can
+- load models with 8bit or 4bit quantization (`load_in_[4|8]bit=True`)
+- set torch dtypes (`torch_dtype=torch.bfloat16`)
+- use auto GPUs placement and inference (`device_map="auto"`)
+
+**Running Inference**
+
+```python
+texts = [
+    "Write a poem in the style of Leonardo Da Vinci",
+    "Tell me what's 2 + 2.",
+    "Translate the following sentence to Spanish: I went to the supermarket to buy a lighter."
+]
+responses = generator(texts)
+```
+
+The `__call__` function accepts several named arguments (see examples below). For example:
+
 - return only the generated text (`return_full_text=False`)
 - periodic logging of decoded samples (`log_batch_sample=`)
 
@@ -29,12 +61,6 @@ This is mainly for personal use and for simple hardware setups (ideally, single-
 
 - Frameworks other than torch
 - Models not in the Huggingface Hub
-
-## Install
-
-```bash
-pip install git+https://github.com/MilaNLProc/simple-generation.git
-```
 
 ## Minimal Example
 
@@ -78,10 +104,13 @@ This code will, in sequence:
 - run inference on the given texts finding the largest batch size fitting the available resources
 
 
-## Generation Defaults
+## Defaults
 
-If not specified we set some sensible defaults for text generation. **Please note that they might not fit your use case.**
+If not specified we set some sensible defaults. **Please note that they might not fit your use case.**
 
+**Default Generation Configuration**
+
+- If not specified otherwise, the library will use the generation configs listed below.
 ```python
 @dataclasses.dataclass
 class DefaultGenerationConfig(GenerationConfig):
@@ -101,6 +130,9 @@ class DefaultGenerationConfig(GenerationConfig):
     penalty_alpha: float = 0.2
     length_penalty: int = 1.2
 ```
+
+- We set the tokenizer to use left padding. This is required for batched inference with `AutoModelForCausalLM` but should also be fine with any other `AutoModelForSeq2SeqLM` since we use attention masks.
+
 
 ## Warning
 
