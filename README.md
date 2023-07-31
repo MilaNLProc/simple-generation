@@ -18,6 +18,7 @@ pip install git+https://github.com/MilaNLProc/simple-generation.git
 - auto find best batch size (`batch_size="auto"`, `starting_batch_size=512`)
 - torch.compile the model for speed (`compile_model=True`)
 - load and attach LoRA weights (`lora_weights=...`)
+- system prompt templates for modern chat models (`system_prompts="llama-2"`) using [FastChat](https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py)
 - carbon emission estimates using [codecarbon](https://mlco2.github.io/codecarbon/)
 - sparsity and fused kernels for speed with [optimum](https://huggingface.co/docs/optimum/main/en/index) (`use_bettertransformer=True`)
 
@@ -54,14 +55,15 @@ The `__call__` function accepts several named arguments (see examples below). Fo
 
 - auto find the best device placement for speed
 - efficient duplicate and quasi-duplicate removal
-- support system prompt chat formatting following standard templates (e.g., Guanaco, LLaMA, LLaMA 2)
+- ~~support system prompt chat formatting following standard templates (e.g., Vicuna, LLaMA 2)~~
 - support auto gptq quantized models and tentatively GGML
 - spawn web app to quickly local test conversation with gradio
 
 ### What Is Not Supported
 
-- Frameworks other than torch
-- Models not in the Huggingface Hub
+- frameworks other than torch
+- models not in the Huggingface Hub
+- example-specific decoding parameters (i.e., given a batch of samples passed to the `__call__`, we will apply the same set of parameters for every sample)
 
 ## Minimal Example
 
@@ -111,7 +113,7 @@ If not specified we set some sensible defaults. **Please note that they might no
 
 **Default Generation Configuration**
 
-- If not specified otherwise, the library will use the generation configs listed below.
+- If not specified otherwise, the library will use the generation configs listed below, **overriding the default config loaded from the specified model**.
 ```python
 @dataclasses.dataclass
 class DefaultGenerationConfig(GenerationConfig):
@@ -119,17 +121,12 @@ class DefaultGenerationConfig(GenerationConfig):
 
     We apply this parameters to any .generate() call, unless they are not overridden.
     """
-    do_sample: bool = True
-    num_beams: int = 1
-    early_stopping: bool = False
-    temperature: float = 0.75
+    max_new_tokens: int = 512
+    do_sample: bool = True  # set to False for greedy decoding
+    temperature: float = 0.7
+    top_p: float = 1.0
     top_k: int = 50
-    top_p: float = 0.95
-    typical_p: float = 1.0
-    repetition_penalty: float = 1.1
     num_return_sequences: int = 1
-    penalty_alpha: float = 0.2
-    length_penalty: int = 1.2
 ```
 
 - We set the tokenizer to use left padding. This is required for batched inference with `AutoModelForCausalLM` but should also be fine with any other `AutoModelForSeq2SeqLM` since we use attention masks.

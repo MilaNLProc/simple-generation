@@ -17,6 +17,7 @@ from transformers import (
     DataCollatorWithPadding,
     GenerationConfig,
 )
+from .conversation import PromptHandler
 
 logger = logging.getLogger(__name__)
 
@@ -33,18 +34,18 @@ class DefaultGenerationConfig(GenerationConfig):
     We apply this parameters to any .generate() call, unless they are not overridden.
     """
 
-    do_sample: bool = True
-    num_beams: int = 1
-    early_stopping: bool = False
-    temperature: float = 0.75
-    top_k: int = 50
-    top_p: float = 0.95
-    typical_p: float = 1.0
-    repetition_penalty: float = 1.1
-    num_return_sequences: int = 1
-    penalty_alpha: float = 0.2
-    length_penalty: int = 1.2
     max_new_tokens: int = 512
+    do_sample: bool = True  # set to False for greedy decoding
+    temperature: float = 0.7
+    top_p: float = 1.0
+    top_k: int = 50
+    num_return_sequences: int = 1
+    # num_beams: int = 1
+    # early_stopping: bool = False
+    # repetition_penalty: float = 1.0
+    # typical_p: float = 1.0
+    # penalty_alpha: float = 0.2
+    # length_penalty: int = 1.2
 
 
 class SimpleGenerator:
@@ -55,12 +56,20 @@ class SimpleGenerator:
         lora_weights=None,
         compile_model=False,
         use_bettertransformer=False,
+        system_prompt=None,
         **model_kwargs,
     ):
-        trust_remote_code = model_kwargs.get("trust_remote_code", False)
+        # Set a conversation template that will be applied to every prompt generation
+        self.prompt_handler = PromptHandler(system_prompt)
+        if system_prompt is not None:
+            logger.info(
+                f"Using system prompt associate with the model: {system_prompt}. "
+                "See https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py for more details."
+            )
 
         # Load config and inspect whether the model is a seq2seq or causal LM
         config = None
+        trust_remote_code = model_kwargs.get("trust_remote_code", False)
         try:
             config = AutoConfig.from_pretrained(
                 model_name_or_path, trust_remote_code=trust_remote_code
@@ -218,6 +227,13 @@ class SimpleGenerator:
             logger.debug("Texts is not a list. Wrapping it in a list.")
             texts = [texts]
 
+        # Apply the conversation template to the prompt
+        texts = [self.prompt_handler.build_prompt(text) for text in texts]
+        if self.prompt_handler.uses_system_prompt():
+            logger.info(
+                f"Using system prompt {self.prompt_handler.system_prompt} for generation."
+            )
+
         current_generation_args = self.generation_config.to_dict()
 
         logger.info("Setting pad_token_id to eos_token_id for open-end generation")
@@ -225,8 +241,8 @@ class SimpleGenerator:
         current_generation_args["eos_token_id"] = self.tokenizer.eos_token_id
 
         if "max_length" in current_generation_args:
-            logger.warning(
-                "Using max_length is deprecated. Setting max_new_tokens instead."
+            logger.info(
+                "Found 'max_length' in the model's default generation config. Setting this value to 'max_new_tokens' instead."
             )
             current_generation_args["max_new_tokens"] = current_generation_args.pop(
                 "max_length"

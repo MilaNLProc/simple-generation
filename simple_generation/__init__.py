@@ -6,3 +6,4 @@ __version__ = "0.1.0"
 
 
 from .simple_generation import SimpleGenerator, DefaultGenerationConfig
+from .conversation import available_system_prompts

@@ -19,8 +19,8 @@ requirements = [
     "bitsandbytes>=0.39.1",
     "pyopenssl>=23.2.0",
     "optimum>=1.9.0",
-    "tqdm",
-    "codecarbon",
+    "fschat>=0.2.20",
+    "codecarbon>=2.1.4",
 ]
 
 test_requirements = []
