@@ -55,7 +55,8 @@ The `__call__` function accepts several named arguments (see examples below). Fo
 - auto find the best device placement for speed
 - efficient duplicate and quasi-duplicate removal
 - support system prompt chat formatting following standard templates (e.g., Guanaco, LLaMA, LLaMA 2)
-- support auto gptq quantized models
+- support auto gptq quantized models and tentatively GGML
+- spawn web app to quickly local test conversation with gradio
 
 ### What Is Not Supported
 
