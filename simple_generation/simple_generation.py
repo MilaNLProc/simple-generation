@@ -199,9 +199,9 @@ class SimpleGenerator:
                 + user_machine_separator
                 + machine_prefix
             )
-            response = self(
-                query, return_full_text=False, show_progress_bar=False, **kwargs
-            )[0]
+            response = self(query, skip_prompt=True, show_progress_bar=False, **kwargs)[
+                0
+            ]
             history = query + response + turn_separator
 
         out = history
@@ -218,7 +218,7 @@ class SimpleGenerator:
         batch_size="auto",
         starting_batch_size=256,
         num_workers=4,
-        return_full_text=True,
+        skip_prompt=False,
         log_batch_sample=-1,
         show_progress_bar=True,
         **generation_kwargs,
@@ -292,7 +292,7 @@ class SimpleGenerator:
                     )
 
                     # remove initial text prompt form responses
-                    if not return_full_text:
+                    if skip_prompt:
                         output = output[:, len(batch["input_ids"][0]) :]
 
                     decoded = self.tokenizer.batch_decode(
