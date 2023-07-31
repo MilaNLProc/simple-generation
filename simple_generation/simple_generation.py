@@ -1,6 +1,7 @@
 """Main module."""
 import dataclasses
 import logging
+from typing import List
 
 import torch
 from accelerate.utils import find_executable_batch_size
@@ -16,7 +17,6 @@ from transformers import (
     DataCollatorWithPadding,
     GenerationConfig,
 )
-from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +51,8 @@ class SimpleGenerator:
     def __init__(
         self,
         model_name_or_path,
-        lora_weights=None,
         tokenizer_name_or_path=None,
+        lora_weights=None,
         compile_model=False,
         use_bettertransformer=False,
         **model_kwargs,
@@ -98,7 +98,7 @@ class SimpleGenerator:
             tokenizer_name, config=config, padding_side="left"
         )
 
-        # padding_size="left" is required for autoregressive models, and should not make a difference for every other model as we use attention_masks. See: https://github.com/huggingface/transformers/issues/3021#issuecomment-1454266627 for a discussion on why left padding is needed on batched inference 
+        # padding_size="left" is required for autoregressive models, and should not make a difference for every other model as we use attention_masks. See: https://github.com/huggingface/transformers/issues/3021#issuecomment-1454266627 for a discussion on why left padding is needed on batched inference
         self.tokenizer.padding_side = "left"
 
         logger.debug("Setting off the deprecation warning for padding")
