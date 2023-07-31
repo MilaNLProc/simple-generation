@@ -14,7 +14,7 @@ texts = [
 ]
 gen = generator(
     texts,
-    return_full_text=False,
+    skip_prompt=True,
     do_sample=True,
     max_new_tokens=256,
     temperature=0.1,

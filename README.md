@@ -48,7 +48,7 @@ responses = generator(texts)
 
 The `__call__` function accepts several named arguments (see examples below). For example:
 
-- return only the generated text (`return_full_text=False`)
+- return only the generated text (`skip_prompt=True`)
 - periodic logging of decoded samples (`log_batch_sample=`)
 
 ### WIP

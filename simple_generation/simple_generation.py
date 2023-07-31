@@ -59,13 +59,7 @@ class SimpleGenerator:
         system_prompt=None,
         **model_kwargs,
     ):
-        # Set a conversation template that will be applied to every prompt generation
-        self.prompt_handler = PromptHandler(system_prompt)
-        if system_prompt is not None:
-            logger.info(
-                f"Using system prompt associate with the model: {system_prompt}. "
-                "See https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py for more details."
-            )
+        self.system_prompt = system_prompt
 
         # Load config and inspect whether the model is a seq2seq or causal LM
         config = None
@@ -169,39 +163,29 @@ class SimpleGenerator:
 
     def multi_turn(
         self,
-        turn_texts: List[str],
-        user_prefix: str = "User: ",
-        machine_prefix: str = "Assistant: ",
-        user_machine_separator: str = "\n",
-        turn_separator: str = "\n\n",
+        user_prompts: List[str],
         return_last_response: bool = False,
         **kwargs,
     ):
         """Generate a multi-turn conversation.
 
         Args:
-            turn_texts (List[str]): A list of turn texts. Each element is the human written text for a turn.
-            user_prefix (str, optional): The prefix to add to the user text. Defaults to "User: ".
-            machine_prefix (str, optional): The prefix to add to the machine text. Defaults to "Assistant: ".
-            user_machine_separator (str, optional): The separator between the user and machine text. Defaults to "\n".
-            turn_separator (str, optional): The separator between each turn. Defaults to "\n\n".
+            user_prompts (List[str]): A list of turn texts. Each element is the human written text for a turn.
+            return_last_response (bool, optional): If True, the last response is returned as well. Defaults to False.
 
         Returns:
             str: The generated conversation.
         """
 
-        history = ""
-        for turn_text in tqdm(turn_texts, desc="Turns"):
-            query = (
-                history
-                + user_prefix
-                + turn_text
-                + user_machine_separator
-                + machine_prefix
-            )
-            response = self(query, skip_prompt=True, show_progress_bar=False, **kwargs)[
-                0
-            ]
+        history = list()
+        for turn_text in tqdm(user_prompts, desc="Turns"):
+
+            history.append((turn_text, None))
+
+            query = self.prompt_handler.build_prompt(history)
+            response = self(query, skip_prompt=True, show_progress_bar=False, **kwargs)
+            response = response[0]
+
             history = query + response + turn_separator
 
         out = history
@@ -223,16 +207,29 @@ class SimpleGenerator:
         show_progress_bar=True,
         **generation_kwargs,
     ):
+        # Set a conversation template that will be applied to every prompt generation
+        if self.system_prompt is not None:
+            logger.info(
+                f"Using system prompt associate with the model: {self.system_prompt}. "
+                "See https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py for more details."
+            )
+
+            new_texts = list()
+            for text in texts:
+                ph = PromptHandler(self.system_prompt)
+
+                if self.system_prompt == "llama-2":
+                    text += " "  # hack around what fastchat is doing
+
+                ph.append_message("user", text)
+                ph.append_message("system", None)
+                new_texts.append(ph.build_prompt())
+
+            texts = new_texts
+
         if not isinstance(texts, list):
             logger.debug("Texts is not a list. Wrapping it in a list.")
             texts = [texts]
-
-        # Apply the conversation template to the prompt
-        texts = [self.prompt_handler.build_prompt(text) for text in texts]
-        if self.prompt_handler.uses_system_prompt():
-            logger.info(
-                f"Using system prompt {self.prompt_handler.system_prompt} for generation."
-            )
 
         current_generation_args = self.generation_config.to_dict()
 
