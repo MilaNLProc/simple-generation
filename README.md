@@ -58,6 +58,7 @@ The `__call__` function accepts several named arguments (see examples below). Fo
 - ~~support system prompt chat formatting following standard templates (e.g., Vicuna, LLaMA 2)~~
 - support auto gptq quantized models and tentatively GGML
 - spawn web app to quickly local test conversation with gradio
+- even faster inference engine with [vllm](https://vllm.ai/) 
 
 ### What Is Not Supported
 
@@ -105,6 +106,18 @@ This code will, in sequence:
 - load a base llama model in 8bit
 - attach Alpaca LoRA weights to it
 - run inference on the given texts finding the largest batch size fitting the available resources
+
+### System Templates
+
+We support various system templates that can be used to format a prompt accordingly. To get the list of supported options, use (updated on August the 1st, 2023):
+
+```python
+>>> from simple_generation import available_system_prompts
+>>> available_system_prompts()
+['Robin', 'airoboros_v1', 'alpaca', 'baichuan-chat', 'baize', 'bard', 'billa', 'chatglm', 'chatglm2', 'chatgpt', 'claude', 'cutegpt', 'dolly_v2', 'falcon', 'h2ogpt', 'internlm-chat', 'koala_v1', 'llama-2', 'manticore', 'mpt-30b-chat', 'mpt-30b-instruct', 'mpt-7b-chat', 'oasst_llama', 'oasst_pythia', 'openbuddy', 'phoenix', 'polyglot_changgpt', 'redpajama-incite', 'rwkv', 'snoozy', 'stablelm', 'starchat', 'tigerbot', 'tulu', 'vicuna_one_shot', 'vicuna_v1.1', 'vicuna_zero_shot', 'xgen']
+```
+
+To use them you have to use one of the identifiers in the constructor and then run inference as usual. See the [llama2_template example](./examples/llama2_template.py).
 
 
 ## Defaults
