@@ -24,6 +24,9 @@ class PromptHandler:
         )
         self.conversation.append_message(role, message)
 
+    def update_last_message(self, message: str):
+        self.conversation.update_last_message(message)
+
     def build_prompt(self):
         """
         Build a prompt for the model to generate a response given the conversation history.

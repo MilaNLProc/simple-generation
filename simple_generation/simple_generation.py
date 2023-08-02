@@ -161,13 +161,17 @@ class SimpleGenerator:
 
         self.model.eval()
 
-    def multi_turn(
+    def conversation_from_user_prompts(
         self,
         user_prompts: List[str],
+        return_conversation: bool = True,
         return_last_response: bool = False,
         **kwargs,
     ):
-        """Generate a multi-turn conversation.
+        """Generate a multi-turn conversation with multiple user prompts.
+
+        Generate a conversation out of several user prompts. I.e., every user prompt is fed to the model and the response is appended to the history. The history is then fed to the model again, and so on.
+        Note that this operation is not batched.
 
         Args:
             user_prompts (List[str]): A list of turn texts. Each element is the human written text for a turn.
@@ -177,22 +181,40 @@ class SimpleGenerator:
             str: The generated conversation.
         """
 
-        history = list()
-        for turn_text in tqdm(user_prompts, desc="Turns"):
+        if not self.system_prompt:
+            raise NotImplementedError(
+                "No system prompt was provided to the constructor."
+            )
 
-            history.append((turn_text, None))
+        ph = PromptHandler(self.system_prompt)
 
-            query = self.prompt_handler.build_prompt(history)
-            response = self(query, skip_prompt=True, show_progress_bar=False, **kwargs)
+        for user_prompt in tqdm(user_prompts, desc="Turns"):
+
+            ph.append_message("user", user_prompt)
+            ph.append_message("system", None)
+            query = ph.build_prompt()
+
+            response = self(
+                query,
+                skip_prompt=True,
+                show_progress_bar=False,
+                prepare_prompts=False,
+                **kwargs,
+            )
             response = response[0]
 
-            history = query + response + turn_separator
+            ph.conversation.messages = ph.conversation.messages[:-1]
+            ph.append_message("system", response)
 
-        out = history
+        output = ()
+        if return_conversation:
+            conversation = ph.build_prompt()
+            output = (conversation,)
+
         if return_last_response:
-            out = (history, response)
+            output += (response,)
 
-        return out
+        return output
 
     @track_emissions(log_level="warning", measure_power_secs=60)
     @inference_decorator()
@@ -205,31 +227,16 @@ class SimpleGenerator:
         skip_prompt=False,
         log_batch_sample=-1,
         show_progress_bar=True,
+        prepare_prompts=True,
         **generation_kwargs,
     ):
-        # Set a conversation template that will be applied to every prompt generation
-        if self.system_prompt is not None:
-            logger.info(
-                f"Using system prompt associate with the model: {self.system_prompt}. "
-                "See https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py for more details."
-            )
-
-            new_texts = list()
-            for text in texts:
-                ph = PromptHandler(self.system_prompt)
-
-                if self.system_prompt == "llama-2":
-                    text += " "  # hack around what fastchat is doing
-
-                ph.append_message("user", text)
-                ph.append_message("system", None)
-                new_texts.append(ph.build_prompt())
-
-            texts = new_texts
-
+        # make texts a list if it's not
         if not isinstance(texts, list):
             logger.debug("Texts is not a list. Wrapping it in a list.")
             texts = [texts]
+
+        if prepare_prompts:
+            texts = self.prepare_prompts(texts)
 
         current_generation_args = self.generation_config.to_dict()
 
@@ -325,3 +332,30 @@ class SimpleGenerator:
             responses = base_loop(batch_size)
 
         return responses
+
+    def prepare_prompts(self, texts):
+        """
+        Prepare the prompts for generation.
+        """
+
+        # Set a conversation template that will be applied to every prompt generation
+        if self.system_prompt is not None:
+            logger.info(
+                f"Using system prompt associate with the model: {self.system_prompt}. "
+                "See https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py for more details."
+            )
+
+            new_texts = list()
+            for text in texts:
+                ph = PromptHandler(self.system_prompt)
+
+                if self.system_prompt == "llama-2":
+                    text += " "  # hack around what fastchat is doing
+
+                ph.append_message("user", text)
+                ph.append_message("system", None)
+                new_texts.append(ph.build_prompt())
+
+            texts = new_texts
+
+        return texts

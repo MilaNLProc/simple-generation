@@ -66,7 +66,9 @@ The `__call__` function accepts several named arguments (see examples below). Fo
 - models not in the Huggingface Hub
 - example-specific decoding parameters (i.e., given a batch of samples passed to the `__call__`, we will apply the same set of parameters for every sample)
 
-## Minimal Example
+## Examples
+
+### Getting Started
 
 ```python
 from simple_generation import SimpleGenerator
@@ -109,16 +111,61 @@ This code will, in sequence:
 
 ### System Templates
 
-We support various system templates that can be used to format a prompt accordingly. To get the list of supported options, use (updated on August the 1st, 2023):
+We support various system templates that can be used to format a prompt accordingly. To get the list of supported options, use:
 
 ```python
 >>> from simple_generation import available_system_prompts
 >>> available_system_prompts()
+```
+
+List of supported templates (updated on August the 1st, 2023):
+```bash
 ['Robin', 'airoboros_v1', 'alpaca', 'baichuan-chat', 'baize', 'bard', 'billa', 'chatglm', 'chatglm2', 'chatgpt', 'claude', 'cutegpt', 'dolly_v2', 'falcon', 'h2ogpt', 'internlm-chat', 'koala_v1', 'llama-2', 'manticore', 'mpt-30b-chat', 'mpt-30b-instruct', 'mpt-7b-chat', 'oasst_llama', 'oasst_pythia', 'openbuddy', 'phoenix', 'polyglot_changgpt', 'redpajama-incite', 'rwkv', 'snoozy', 'stablelm', 'starchat', 'tigerbot', 'tulu', 'vicuna_one_shot', 'vicuna_v1.1', 'vicuna_zero_shot', 'xgen']
 ```
 
 To use them you have to use one of the identifiers in the constructor and then run inference as usual. See the [llama2_template example](./examples/llama2_template.py).
 
+### Multiple-Request Conversation
+
+The library supports creating a conversation by prompting models with multiple requests. I.e., it is possible to build a multi-turn conversation with fixed user requests. You can use the `conversation_from_user_prompts()` method, that accepts the same arguments of `__call__`.
+
+For example:
+```python
+from simple_generation import SimpleGenerator
+import torch
+
+texts = [
+    "What kind of noises did dinosaurs make?",
+    "What is the most popular programming language?",
+    "What is 2 + 2?",
+    "Tell me how to make a cake.",
+]
+
+generator = SimpleGenerator(
+    "lmsys/vicuna-7b-v1.3",
+    load_in_8bit=True,
+    system_prompt="vicuna_v1.1",
+    torch_dtype=torch.bfloat16,
+)
+
+conversation, last_response = generator.conversation_from_user_prompts(
+    texts,
+    do_sample=True,
+    top_p=0.95,
+    temperature=0.1,
+    max_new_tokens=512,
+    return_conversation=True
+)
+
+print("Conversation:")
+print(conversation)
+```
+
+will print:
+
+```bash
+
+```
 
 ## Defaults
 
