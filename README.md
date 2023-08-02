@@ -148,13 +148,12 @@ generator = SimpleGenerator(
     torch_dtype=torch.bfloat16,
 )
 
-conversation, last_response = generator.conversation_from_user_prompts(
+conversation = generator.conversation_from_user_prompts(
     texts,
     do_sample=True,
     top_p=0.95,
     temperature=0.1,
     max_new_tokens=512,
-    return_conversation=True
 )
 
 print("Conversation:")
