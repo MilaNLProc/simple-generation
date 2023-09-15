@@ -3,7 +3,8 @@
 Simple Generator offers a minimal interface to run text generation with HuggingFace checkpoint.
 The core idea is to ship many neat features out of the box and avoid boilerplate.
 
-This is mainly for personal use and simple hardware setups (ideally, single-node single- or multi-gpu). A good part of it is WIP. \\
+This is mainly for personal use and simple hardware setups (ideally, single-node single- or multi-gpu). A good part of it is WIP.
+
 Moreover, please note that **the library will apply some (sensible) defaults (on where to place models, generation configuration, and so on) which might not suit your use case** and should be edited accordingly. Please head to [defaults](#defaults) to see a list of things you should be aware of.
 
 Install with:
