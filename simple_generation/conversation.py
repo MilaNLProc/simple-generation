@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Union, Iterable, Tuple
+from typing import Iterable, List, Tuple, Union
 
 import fastchat.conversation as conversation
 
@@ -13,9 +13,14 @@ def available_system_prompts():
 
 
 class PromptHandler:
-    def __init__(self, system_prompt) -> None:
+    def __init__(self, system_prompt: str, system_message: str = None) -> None:
         self.system_prompt = system_prompt
+        self.system_message = system_message
         self.conversation = conv_templates[system_prompt]
+
+        if system_message is not None:
+            self.conversation.system = system_message
+
         self.conversation.messages = list()
 
     def append_message(self, role: str, message: str = None):

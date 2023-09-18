@@ -17,6 +17,7 @@ from transformers import (
     DataCollatorWithPadding,
     GenerationConfig,
 )
+
 from .conversation import PromptHandler
 
 logger = logging.getLogger(__name__)
@@ -57,9 +58,11 @@ class SimpleGenerator:
         compile_model=False,
         use_bettertransformer=False,
         system_prompt=None,
+        system_message=None,
         **model_kwargs,
     ):
         self.system_prompt = system_prompt
+        self.system_message = system_message
 
         # Load config and inspect whether the model is a seq2seq or causal LM
         config = None
@@ -345,12 +348,14 @@ class SimpleGenerator:
                 "See https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py for more details."
             )
 
+            if self.system_message is not None:
+                logger.info(
+                    f"Using system message associate with the model: {self.system_message}."
+                )
+
             new_texts = list()
             for text in texts:
-                ph = PromptHandler(self.system_prompt)
-
-                if self.system_prompt == "llama-2":
-                    text += " "  # hack around what fastchat is doing
+                ph = PromptHandler(self.system_prompt, self.system_message)
 
                 ph.append_message("user", text)
                 ph.append_message("system", None)
