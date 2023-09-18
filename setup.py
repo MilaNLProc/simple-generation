@@ -21,6 +21,7 @@ requirements = [
     "optimum>=1.9.0",
     "fschat>=0.2.20",
     "codecarbon>=2.1.4",
+    "scipy>=1.10.1"
 ]
 
 test_requirements = []
