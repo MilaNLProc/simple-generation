@@ -77,7 +77,9 @@ class SimpleGenerator:
             )
 
             if config.architectures == "LLaMAForCausalLM":
-                logger.warning("We found a deprecated LLaMAForCausalLM architecture in the model's config and updated it to LlamaForCausalLM.")
+                logger.warning(
+                    "We found a deprecated LLaMAForCausalLM architecture in the model's config and updated it to LlamaForCausalLM."
+                )
                 config.architectures == "LlamaForCausalLM"
 
             is_encoder_decoder = getattr(config, "is_encoder_decoder", None)
@@ -197,7 +199,6 @@ class SimpleGenerator:
         ph = PromptHandler(self.system_prompt)
 
         for user_prompt in tqdm(user_prompts, desc="Turns"):
-
             ph.append_message("user", user_prompt)
             ph.append_message("system", None)
             query = ph.build_prompt()
@@ -224,7 +225,7 @@ class SimpleGenerator:
 
         return output
 
-    @track_emissions(log_level="warning", measure_power_secs=60)
+    @track_emissions(log_level="error", measure_power_secs=60)
     @inference_decorator()
     def __call__(
         self,
