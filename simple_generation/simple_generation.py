@@ -63,6 +63,10 @@ class SimpleGenerator:
     ):
         self.system_prompt = system_prompt
         self.system_message = system_message
+        if self.system_prompt is None:
+            logger.warning(
+                "No system prompt template specified. Be aware that your generation will use your plain input."
+            )
 
         # Load config and inspect whether the model is a seq2seq or causal LM
         config = None
@@ -73,6 +77,7 @@ class SimpleGenerator:
             )
 
             if config.architectures == "LLaMAForCausalLM":
+                logger.warning("We found a deprecated LLaMAForCausalLM architecture in the model's config and updated it to LlamaForCausalLM.")
                 config.architectures == "LlamaForCausalLM"
 
             is_encoder_decoder = getattr(config, "is_encoder_decoder", None)
