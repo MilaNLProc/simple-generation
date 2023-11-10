@@ -1,3 +1,5 @@
+![Simple Generation Dining](/docs/_static/banner.png)
+
 # Simple Generation
 
 Simple Generator offers a minimal interface to run text generation with HuggingFace checkpoint.
