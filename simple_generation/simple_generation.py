@@ -253,6 +253,7 @@ class SimpleGenerator:
         current_generation_args["pad_token_id"] = self.tokenizer.eos_token_id
         current_generation_args["eos_token_id"] = self.tokenizer.eos_token_id
 
+        # Some model defaults use the outdated "max_length" parameter
         if "max_length" in current_generation_args:
             logger.info(
                 "Found 'max_length' in the model's default generation config. Setting this value to 'max_new_tokens' instead."
@@ -267,8 +268,17 @@ class SimpleGenerator:
             )
             current_generation_args.update(generation_kwargs)
 
-        logger.info("Generation args:", current_generation_args)
+        # Postprocess generation kwargs
+        if (
+            "temperature" in current_generation_args
+            and current_generation_args["temperature"] == 0
+        ):
+            logger.info("Temperature cannot be 0. Setting it to 1e-4.")
+            current_generation_args["temperature"] = 1e-4
 
+        logger.debug("Generation args:", current_generation_args)
+
+        # Processing the input text
         dataset = Dataset.from_dict({"text": texts})
         dataset = dataset.map(
             lambda x: self.tokenizer(x["text"]), batched=True, remove_columns=["text"]
@@ -316,12 +326,12 @@ class SimpleGenerator:
                     if isinstance(e, torch.cuda.OutOfMemoryError):
                         raise e
 
-                    print("Error", e)
-                    print("Generation failed. Skipping batch.")
+                    logger.error(f"Error {e}")
+                    logger.error("Generation failed. Skipping batch.")
                     decoded = [""] * len(batch["input_ids"])
 
                 if log_batch_sample != -1 and (log_batch_sample % (idx + 1) == 0):
-                    print(f"Log decoded text at batch_id {idx}", decoded[0])
+                    logger.info(f"Log decoded text at batch_id {idx}", decoded[0])
 
                 output_texts.extend(decoded)
 
@@ -329,11 +339,11 @@ class SimpleGenerator:
 
         @find_executable_batch_size(starting_batch_size=starting_batch_size)
         def find_batch_size_loop(batch_size):
-            print(f"Auto finding batch size... Testing bs={batch_size}")
+            logger.info(f"Auto finding batch size... Testing bs={batch_size}")
             return base_loop(batch_size)
 
         if batch_size == "auto":
-            print(
+            logger.info(
                 f"Finding the optimal batch size... Starting with {starting_batch_size}"
             )
             responses = find_batch_size_loop()
