@@ -210,7 +210,7 @@ This is a basic recipe for a cake, and there are many variations and modificatio
 
 ### Distributed Inference
 
-Simple Generation supports DDP to run distributed inference in Single-Node, Multi-GPUs setups. Note that a copy of the model will be instantiated in each GPU (instead of smart weights placements across multiple GPUs with `device_map="auto"`), so **each of your GPU will need to have enough space to fit a copy of the model.
+Simple Generation supports DDP to run distributed inference in Single-Node, Multi-GPUs setups. Note that a copy of the model will be instantiated in each GPU (instead of smart weights placements across multiple GPUs with `device_map="auto"`), so **each of your GPU will need to have enough space to fit a copy of the model**.
 
 The only change you'll need to take is launching your script with `accelerate`. E.g.,:
 
