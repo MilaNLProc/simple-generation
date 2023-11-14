@@ -1,10 +1,12 @@
 """Main module."""
 import dataclasses
-import logging
 from typing import List
 
 import torch
-from accelerate.utils import find_executable_batch_size
+import torch.distributed as dist
+from accelerate import Accelerator
+from accelerate.logging import get_logger
+from accelerate.utils import find_executable_batch_size, gather_object
 from codecarbon import track_emissions
 from datasets import Dataset
 from peft import PeftModel
@@ -20,7 +22,7 @@ from transformers import (
 
 from .conversation import PromptHandler
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 inference_decorator = (
@@ -61,6 +63,11 @@ class SimpleGenerator:
         system_message=None,
         **model_kwargs,
     ):
+        # Use accelerator to distribute model if DDP is enabled
+        self.accelerator = Accelerator(device_placement=True)
+        self.device = self.accelerator.device
+        self.is_ddp = True if dist.is_initialized() else False
+
         self.system_prompt = system_prompt
         self.system_message = system_message
         if self.system_prompt is None:
@@ -134,12 +141,16 @@ class SimpleGenerator:
             self.generation_config = DefaultGenerationConfig()
 
         # setting some model kwargs by default
-        if "device_map" not in model_kwargs:
-            logger.debug("Setting the device map to 'auto' since not specified")
+        if "device_map" not in model_kwargs and not self.is_ddp:
+            logger.info("Setting the device map to 'auto' since not specified")
             model_kwargs["device_map"] = "auto"
 
         try:
             self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
+
+            if self.is_ddp:
+                self.model.to(self.device)
+                logger.debug(f"Sending model to {self.device}")
         except:
             model_kwargs.pop("device_map")
             logger.debug("Removig device_map and trying loading model again")
@@ -170,6 +181,10 @@ class SimpleGenerator:
                 )
 
         self.model.eval()
+
+    @property
+    def local_rank(self):
+        return dist.get_rank() if self.is_ddp else 0
 
     def conversation_from_user_prompts(
         self,
@@ -296,10 +311,12 @@ class SimpleGenerator:
                 batch_size=batch_size,
                 num_workers=num_workers,
                 collate_fn=collator,
+                shuffle=False,
                 pin_memory=True,
             )
+            loader = self.accelerator.prepare(loader)
 
-            output_texts = list()
+            outputs = list()
             for idx, batch in tqdm(
                 enumerate(loader),
                 desc="Generation",
@@ -328,14 +345,32 @@ class SimpleGenerator:
 
                     logger.error(f"Error {e}")
                     logger.error("Generation failed. Skipping batch.")
-                    decoded = [""] * len(batch["input_ids"])
+                    decoded = ["ERROR: Generation failed"] * len(batch["input_ids"])
+
+                outputs.extend(decoded)
 
                 if log_batch_sample != -1 and (log_batch_sample % (idx + 1) == 0):
                     logger.info(f"Log decoded text at batch_id {idx}", decoded[0])
 
-                output_texts.extend(decoded)
+            if self.is_ddp:
+                target_list = [None for _ in range(dist.get_world_size())]
 
-            return output_texts
+                dist.gather_object(
+                    outputs, target_list if dist.get_rank() == 0 else None, dst=0
+                )
+
+                if self.is_main_process:
+                    responses = [item for sublist in target_list for item in sublist]
+                else:
+                    logger.debug(
+                        f"Killing non-main process with rank {dist.get_rank()} as no longer needed."
+                    )
+                    exit(0)  # we do not need the process anymore
+
+            else:
+                responses = decoded
+
+            return responses
 
         @find_executable_batch_size(starting_batch_size=starting_batch_size)
         def find_batch_size_loop(batch_size):
@@ -351,6 +386,10 @@ class SimpleGenerator:
             responses = base_loop(batch_size)
 
         return responses
+
+    @property
+    def is_main_process(self):
+        return self.accelerator.is_main_process
 
     def prepare_prompts(self, texts):
         """

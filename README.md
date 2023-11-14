@@ -24,6 +24,7 @@ pip install git+https://github.com/MilaNLProc/simple-generation.git
 - system prompt templates for modern chat models (`system_prompts="llama-2"`) using [FastChat](https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py)
 - carbon emission estimates using [codecarbon](https://mlco2.github.io/codecarbon/)
 - sparsity and fused kernels for speed with [optimum](https://huggingface.co/docs/optimum/main/en/index) (`use_bettertransformer=True`)
+- DDP for single-node, multi-gpu setups using [accelerate](https://github.com/huggingface/accelerate). See [Distributed Inference](#distributed-inference)
 
 **Loading a Model**
 
@@ -61,7 +62,8 @@ The `__call__` function accepts several named arguments (see examples below). Fo
 - ~~support system prompt chat formatting following standard templates (e.g., Vicuna, LLaMA 2)~~
 - support auto gptq quantized models and tentatively GGML
 - spawn web app to quickly local test conversation with gradio
-- even faster inference engine with [vllm](https://vllm.ai/) 
+- even faster inference engine with [vllm](https://vllm.ai/)
+- ~~distributed inference for single-node, multi-gpu setups~~
 
 ### What Is Not Supported
 
@@ -165,7 +167,7 @@ print(conversation)
 
 will print:
 
-```bash
+```
 Conversation:
 A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: What kind of noises did dinosaurs make? ASSISTANT: It is difficult to know for sure what noises dinosaurs made, as they lived millions of years ago and did not leave behind any recorded sounds. However, scientists can make educated guesses about what some dinosaurs might have sounded like based on their physical characteristics and behavior.
 
@@ -204,6 +206,32 @@ Instructions:
 8. Remove the cake from the oven and let it cool in the pan for 10 minutes. Then, remove the cake from the pan and let it cool completely on a wire rack.
 
 This is a basic recipe for a cake, and there are many variations and modifications that can be made to suit your preferences and the occasion for which you are making the cake. For example, you can add flavorings such as vanilla extract or chocolate chips, or use a different type of flour or sugar if you have a specific dietary need or preference.</s></s>
+```
+
+### Distributed Inference
+
+Simple Generation supports DDP to run distributed inference in Single-Node, Multi-GPUs setups. Note that a copy of the model will be instantiated in each GPU (instead of smart weights placements across multiple GPUs with `device_map="auto"`), so **each of your GPU will need to have enough space to fit a copy of the model.
+
+The only change you'll need to take is launching your script with `accelerate`. E.g.,:
+
+```bash
+accelerate launch --num_processes 2 examples/inference.py # uses 2 GPUs
+```
+
+Some timing tests on 2xA5000 with Llama-2-7b-chat and 384 input prompts:
+
+```shell
+# single GPU
+CUDA_VISIBLE_DEVICES=0 python examples/inference.py
+>> 217s
+
+# two GPUs, smart placement
+CUDA_VISIBLE_DEVICES=0,1 python examples/inference.py
+>> 219s
+
+# two GPUs, DDP
+CUDA_VISIBLE_DEVICES=0,1 accelerate launch --num_processes 2 examples/inference.py
+>> 105s
 ```
 
 ## Defaults
