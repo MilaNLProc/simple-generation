@@ -218,6 +218,8 @@ The only change you'll need to take is launching your script with `accelerate`. 
 accelerate launch --num_processes 2 examples/inference.py # uses 2 GPUs
 ```
 
+Note: if you do not specify `--num_processes` all local GPUs will be used.
+
 Some timing tests on 2xA5000 with Llama-2-7b-chat and 384 input prompts:
 
 ```shell
