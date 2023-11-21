@@ -140,11 +140,10 @@ class SimpleGenerator:
             logger.warning("Could not load generation config. Using default one.")
             self.generation_config = DefaultGenerationConfig()
 
-        # setting some model kwargs by default
+        # By default we use HF's smart device placement strategy for model weights
         if "device_map" not in model_kwargs and not self.is_ddp:
             logger.info("Setting the device map to 'auto' since not specified")
             model_kwargs["device_map"] = "auto"
-
         try:
             self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
 
@@ -268,7 +267,7 @@ class SimpleGenerator:
         current_generation_args["pad_token_id"] = self.tokenizer.eos_token_id
         current_generation_args["eos_token_id"] = self.tokenizer.eos_token_id
 
-        # Some model defaults use the outdated "max_length" parameter
+        # We fix when some model default to the outdated "max_length" parameter
         if "max_length" in current_generation_args:
             logger.info(
                 "Found 'max_length' in the model's default generation config. Setting this value to 'max_new_tokens' instead."
@@ -314,7 +313,9 @@ class SimpleGenerator:
                 shuffle=False,
                 pin_memory=True,
             )
-            loader = self.accelerator.prepare(loader)
+
+            if self.is_ddp:
+                loader = self.accelerator.prepare(loader)
 
             outputs = list()
             for idx, batch in tqdm(
@@ -368,7 +369,7 @@ class SimpleGenerator:
                     exit(0)  # we do not need the process anymore
 
             else:
-                responses = decoded
+                responses = outputs
 
             return responses
 
