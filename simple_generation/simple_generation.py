@@ -6,7 +6,7 @@ import torch
 import torch.distributed as dist
 from accelerate import Accelerator
 from accelerate.logging import get_logger
-from accelerate.utils import find_executable_batch_size, gather_object
+from accelerate.utils import find_executable_batch_size
 from codecarbon import track_emissions
 from datasets import Dataset
 from peft import PeftModel
@@ -21,6 +21,7 @@ from transformers import (
 )
 
 from .conversation import PromptHandler
+from .utils import DistributedEvalSampler
 
 logger = get_logger(__name__)
 
@@ -310,19 +311,21 @@ class SimpleGenerator:
                 batch_size=batch_size,
                 num_workers=num_workers,
                 collate_fn=collator,
-                shuffle=False,
+                sampler=DistributedEvalSampler(dataset),
                 pin_memory=True,
             )
 
-            if self.is_ddp:
-                loader = self.accelerator.prepare(loader)
+            # if self.is_ddp:
+            #     loader = self.accelerator.prepare(loader)
+
+            print("Loader len:", len(loader))
 
             outputs = list()
-            for idx, batch in tqdm(
+            for batch_idx, batch in tqdm(
                 enumerate(loader),
                 desc="Generation",
                 total=len(loader),
-                disable=not show_progress_bar,
+                disable=not show_progress_bar or self.local_rank != 0,
             ):
                 batch = batch.to(self.model.device)
                 try:
@@ -332,7 +335,7 @@ class SimpleGenerator:
                         **current_generation_args,
                     )
 
-                    # remove initial text prompt form responses
+                    # remove initial text prompt from responses
                     if skip_prompt:
                         output = output[:, len(batch["input_ids"][0]) :]
 
@@ -348,10 +351,16 @@ class SimpleGenerator:
                     logger.error("Generation failed. Skipping batch.")
                     decoded = ["ERROR: Generation failed"] * len(batch["input_ids"])
 
+                # if self.is_ddp:
+                #     decoded = [
+                #         (dist.get_rank(), batch_idx, idx, text)
+                #         for idx, text in enumerate(decoded)
+                #     ]
+
                 outputs.extend(decoded)
 
-                if log_batch_sample != -1 and (log_batch_sample % (idx + 1) == 0):
-                    logger.info(f"Log decoded text at batch_id {idx}", decoded[0])
+                if log_batch_sample != -1 and (log_batch_sample % (batch_idx + 1) == 0):
+                    logger.info(f"Log decoded text at batch_id {batch_idx}", decoded[0])
 
             if self.is_ddp:
                 target_list = [None for _ in range(dist.get_world_size())]

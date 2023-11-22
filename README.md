@@ -260,10 +260,13 @@ class DefaultGenerationConfig(GenerationConfig):
 
 - We set the tokenizer to use left padding. This is required for batched inference with `AutoModelForCausalLM` but should also be fine with any other `AutoModelForSeq2SeqLM` since we use attention masks.
 
-
 ## Warning
 
 There seem to be instabilities while using 4bit quantization (not related to this library). Use it only if strictly necessary.
+
+## Acknowledgments
+
+Thanks to Paul Röttger for the many inputs and priceless bug hunting.
 
 ## Reference
 

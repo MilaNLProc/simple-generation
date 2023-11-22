@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "simple-generation"
+version = "0.1.2"
+description = "A python package to run inference with HuggingFace checkpoints wrapping many convenient features."
+authors = ["Giuseppe Attanasio <giuseppeattanasio6@gmail.com>"]
+license = "Apache Software License 2.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+transformers = "^4.30.2"
+tokenizers = "^0.13.3"
+accelerate = "^0.20.3"
+datasets = "^2.12.0"
+peft = "^0.3.0"
+bitsandbytes = "^0.39.1"
+pyopenssl = "^23.2.0"
+optimum = "^1.9.0"
+fschat = "^0.2.28"
+codecarbon = "^2.1.4"
+scipy = "^1.10.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
