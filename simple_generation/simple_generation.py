@@ -67,7 +67,6 @@ class SimpleGenerator:
         # Use accelerator to distribute model if DDP is enabled
         self.accelerator = Accelerator(device_placement=True)
         self.device = self.accelerator.device
-        self.is_ddp = True if dist.is_initialized() else False
 
         self.system_prompt = system_prompt
         self.system_message = system_message
@@ -185,6 +184,14 @@ class SimpleGenerator:
     @property
     def local_rank(self):
         return dist.get_rank() if self.is_ddp else 0
+
+    @property
+    def is_ddp(self):
+        return dist.is_initialized()
+
+    @property
+    def is_main_process(self):
+        return self.accelerator.is_main_process
 
     def conversation_from_user_prompts(
         self,
@@ -311,14 +318,9 @@ class SimpleGenerator:
                 batch_size=batch_size,
                 num_workers=num_workers,
                 collate_fn=collator,
-                sampler=DistributedEvalSampler(dataset),
+                sampler=DistributedEvalSampler(dataset) if self.is_ddp else None,
                 pin_memory=True,
             )
-
-            # if self.is_ddp:
-            #     loader = self.accelerator.prepare(loader)
-
-            print("Loader len:", len(loader))
 
             outputs = list()
             for batch_idx, batch in tqdm(
@@ -351,12 +353,6 @@ class SimpleGenerator:
                     logger.error("Generation failed. Skipping batch.")
                     decoded = ["ERROR: Generation failed"] * len(batch["input_ids"])
 
-                # if self.is_ddp:
-                #     decoded = [
-                #         (dist.get_rank(), batch_idx, idx, text)
-                #         for idx, text in enumerate(decoded)
-                #     ]
-
                 outputs.extend(decoded)
 
                 if log_batch_sample != -1 and (log_batch_sample % (batch_idx + 1) == 0):
@@ -375,7 +371,7 @@ class SimpleGenerator:
                     logger.debug(
                         f"Killing non-main process with rank {dist.get_rank()} as no longer needed."
                     )
-                    exit(0)  # we do not need the process anymore
+                    exit(0)
 
             else:
                 responses = outputs
@@ -396,10 +392,6 @@ class SimpleGenerator:
             responses = base_loop(batch_size)
 
         return responses
-
-    @property
-    def is_main_process(self):
-        return self.accelerator.is_main_process
 
     def prepare_prompts(self, texts):
         """
