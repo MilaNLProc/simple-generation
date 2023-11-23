@@ -9,7 +9,12 @@ This is mainly for personal use and simple hardware setups (ideally, single-node
 
 Moreover, please note that **the library will apply some (sensible) defaults (on where to place models, generation configuration, and so on) which might not suit your use case** and should be edited accordingly. Please head to [defaults](#defaults) to see a list of things you should be aware of.
 
-Install with:
+Install:
+```bash
+pip install simple-generation
+```
+
+Or, install it from source with:
 ```bash
 pip install git+https://github.com/MilaNLProc/simple-generation.git
 ```
