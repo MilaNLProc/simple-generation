@@ -187,7 +187,7 @@ class SimpleGenerator:
 
     @property
     def is_ddp(self):
-        return dist.is_initialized()
+        return dist.is_available() and dist.is_initialized()
 
     @property
     def is_main_process(self):
@@ -321,6 +321,8 @@ class SimpleGenerator:
                 sampler=DistributedEvalSampler(dataset) if self.is_ddp else None,
                 pin_memory=True,
             )
+
+            print("IS DDP", self.is_ddp)
 
             outputs = list()
             for batch_idx, batch in tqdm(
