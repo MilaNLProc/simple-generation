@@ -1,0 +1,15 @@
+torch>=1.10.0
+transformers>=4.30.2
+tokenizers>=0.13.3
+accelerate>=0.20.3
+datasets>=2.12.0
+peft>=0.3.0
+bitsandbytes>=0.39.1
+pyopenssl>=23.2.0
+optimum>=1.9.0
+codecarbon>=2.1.4
+scipy>=1.10.1
+sphinx-toggleprompt>=0.3.1
+sphinx-copybutton>=0.5.1
+sphinx-favicon>=1.0.1
+pydata_sphinx_theme>=0.12.0

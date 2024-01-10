@@ -1,8 +1,11 @@
 ![Simple Generation Dining](/docs/_static/banner.png)
 
+[![Latest PyPI version](https://img.shields.io/pypi/v/simple-generation.svg)](https://pypi.python.org/pypi/simple-generation)
+[![downloads badge](https://pepy.tech/badge/simple-generation/month)](https://pepy.tech/project/simple-generation)
+
 # Simple Generation
 
-Simple Generator offers a minimal interface to run text generation with HuggingFace checkpoint.
+Simple Generation offers a minimal interface to run text generation with HuggingFace checkpoint.
 The core idea is to ship many neat features out of the box and avoid boilerplate.
 
 This is mainly for personal use and simple hardware setups (ideally, single-node single- or multi-gpu).
@@ -23,7 +26,7 @@ pip install git+https://github.com/MilaNLProc/simple-generation.git
 
 - any model that can be loaded with `AutoModelForCausalLM` or `AutoModelForSeq2SeqLM`
 - batched inference for speed (`batch_size=256`)
-- auto find best batch size (`batch_size="auto"`, `starting_batch_size=512`)
+- auto find the largest batch size fitting in your accelerator (`batch_size="auto"`, `starting_batch_size=512`)
 - torch.compile the model for speed (`compile_model=True`)
 - load and attach LoRA weights (`lora_weights=...`)
 - chat templates for modern chat models (`apply_chat_template=True`)
@@ -124,7 +127,7 @@ This code will, in sequence:
 Starting from v0.2.0, we leverage Hugging Face's [chat templating system](https://huggingface.co/docs/transformers/chat_templating). You can activate it by using `apply_chat_template=True` when invoking `__call__`.
 You can also enable the generation prompt by setting `add_generation_prompt=True`. See [here](https://huggingface.co/docs/transformers/chat_templating#what-are-generation-prompts) why that might be a good idea.
 
-**Note: chat templates are not enabled by default!.**
+**Note: chat templates are not enabled by default!**
 
 ### Simple Translation
 
