@@ -1,6 +1,6 @@
 """Main module."""
 import dataclasses
-from typing import List
+from typing import List, Dict
 
 import torch
 import torch.distributed as dist
@@ -20,7 +20,6 @@ from transformers import (
     GenerationConfig,
 )
 
-from .conversation import PromptHandler
 from .utils import DistributedEvalSampler
 
 logger = get_logger(__name__)
@@ -53,6 +52,18 @@ class DefaultGenerationConfig(GenerationConfig):
 
 
 class SimpleGenerator:
+    @property
+    def local_rank(self):
+        return dist.get_rank() if self.is_ddp else 0
+
+    @property
+    def is_ddp(self):
+        return dist.is_available() and dist.is_initialized()
+
+    @property
+    def is_main_process(self):
+        return self.accelerator.is_main_process
+
     def __init__(
         self,
         model_name_or_path,
@@ -60,20 +71,11 @@ class SimpleGenerator:
         lora_weights=None,
         compile_model=False,
         use_bettertransformer=False,
-        system_prompt=None,
-        system_message=None,
         **model_kwargs,
     ):
         # Use accelerator to distribute model if DDP is enabled
         self.accelerator = Accelerator(device_placement=True)
         self.device = self.accelerator.device
-
-        self.system_prompt = system_prompt
-        self.system_message = system_message
-        if self.system_prompt is None:
-            logger.warning(
-                "No system prompt template specified. Be aware that your generation will use your plain input."
-            )
 
         # Load config and inspect whether the model is a seq2seq or causal LM
         config = None
@@ -181,25 +183,20 @@ class SimpleGenerator:
 
         self.model.eval()
 
-    @property
-    def local_rank(self):
-        return dist.get_rank() if self.is_ddp else 0
+        logger.info(f"""
+            Initialization completed!
+            - use_bettertransformer: {use_bettertransformer},
+            - compile_model: {compile_model},
+            - 
 
-    @property
-    def is_ddp(self):
-        return dist.is_available() and dist.is_initialized()
-
-    @property
-    def is_main_process(self):
-        return self.accelerator.is_main_process
+            """
+        )
 
     def conversation_from_user_prompts(
         self,
         user_prompts: List[str],
-        return_conversation: bool = True,
-        return_last_response: bool = False,
         **kwargs,
-    ):
+    ) -> List[Dict]:
         """Generate a multi-turn conversation with multiple user prompts.
 
         Generate a conversation out of several user prompts. I.e., every user prompt is fed to the model and the response is appended to the history. The history is then fed to the model again, and so on.
@@ -210,42 +207,29 @@ class SimpleGenerator:
             return_last_response (bool, optional): If True, the last response is returned as well. Defaults to False.
 
         Returns:
-            str: The generated conversation.
+            List[Dict]: A list containing the conversation, one item per turn, following the Hugging Face chat template format.
         """
 
-        if not self.system_prompt:
-            raise NotImplementedError(
-                "No system prompt was provided to the constructor."
-            )
-
-        ph = PromptHandler(self.system_prompt)
-
+        conversation = list()
         for user_prompt in tqdm(user_prompts, desc="Turns"):
-            ph.append_message("user", user_prompt)
-            ph.append_message("system", None)
-            query = ph.build_prompt()
+
+            conversation.append({"role": "user", "content": user_prompt})
+            conv_text = self.tokenizer.apply_chat_template(
+                conversation, tokenize=False, add_generation_prompt=True
+            )
 
             response = self(
-                query,
+                conv_text,
                 skip_prompt=True,
                 show_progress_bar=False,
-                prepare_prompts=False,
+                apply_chat_template=False,
                 **kwargs,
             )
-            response = response[0]
 
-            ph.conversation.messages = ph.conversation.messages[:-1]
-            ph.append_message("system", response)
+            # append the model's response to the conversation
+            conversation.append({"role": "assistant", "content": response[0]})
 
-        output = ()
-        if return_conversation:
-            conversation = ph.build_prompt()
-            output = (conversation,)
-
-        if return_last_response:
-            output += (response,)
-
-        return output
+        return conversation
 
     @track_emissions(log_level="error", measure_power_secs=60)
     @inference_decorator()
@@ -258,7 +242,9 @@ class SimpleGenerator:
         skip_prompt=False,
         log_batch_sample=-1,
         show_progress_bar=True,
-        prepare_prompts=True,
+        prepare_prompts=False,  # keeping it here for consistency
+        apply_chat_template=False,
+        add_generation_prompt=False,
         **generation_kwargs,
     ):
         # make texts a list if it's not
@@ -267,7 +253,13 @@ class SimpleGenerator:
             texts = [texts]
 
         if prepare_prompts:
+            raise ValueError(
+                "The argument 'prepare_prompts' has been deprecated. Set 'apply_chat_template=True' instead."
+            )
             texts = self.prepare_prompts(texts)
+
+        if apply_chat_template:
+            texts = self._apply_chat_template_user(texts, add_generation_prompt)
 
         current_generation_args = self.generation_config.to_dict()
 
@@ -303,7 +295,10 @@ class SimpleGenerator:
         # Processing the input text
         dataset = Dataset.from_dict({"text": texts})
         dataset = dataset.map(
-            lambda x: self.tokenizer(x["text"]), batched=True, remove_columns=["text"]
+            lambda x: self.tokenizer(x["text"]),
+            batched=True,
+            remove_columns=["text"],
+            desc="Tokenizing texts",
         )
 
         collator = DataCollatorWithPadding(
@@ -321,8 +316,6 @@ class SimpleGenerator:
                 sampler=DistributedEvalSampler(dataset) if self.is_ddp else None,
                 pin_memory=True,
             )
-
-            print("IS DDP", self.is_ddp)
 
             outputs = list()
             for batch_idx, batch in tqdm(
@@ -395,31 +388,12 @@ class SimpleGenerator:
 
         return responses
 
-    def prepare_prompts(self, texts):
-        """
-        Prepare the prompts for generation.
-        """
-
-        # Set a conversation template that will be applied to every prompt generation
-        if self.system_prompt is not None:
-            logger.info(
-                f"Using system prompt associate with the model: {self.system_prompt}. "
-                "See https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py for more details."
+    def _apply_chat_template_user(self, texts, add_generation_prompt):
+        return [
+            self.tokenizer.apply_chat_template(
+                [{"role": "user", "content": t}],
+                tokenize=False,
+                add_generation_prompt=add_generation_prompt,
             )
-
-            if self.system_message is not None:
-                logger.info(
-                    f"Using system message associate with the model: {self.system_message}."
-                )
-
-            new_texts = list()
-            for text in texts:
-                ph = PromptHandler(self.system_prompt, self.system_message)
-
-                ph.append_message("user", text)
-                ph.append_message("system", None)
-                new_texts.append(ph.build_prompt())
-
-            texts = new_texts
-
-        return texts
+            for t in texts
+        ]

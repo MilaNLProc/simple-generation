@@ -1,5 +1,6 @@
 from simple_generation import SimpleGenerator
 import torch
+from pprint import pprint
 
 texts = [
     "What kind of noises did dinosaurs make?",
@@ -9,24 +10,17 @@ texts = [
 ]
 
 generator = SimpleGenerator(
-    "lmsys/vicuna-7b-v1.3",
-    load_in_8bit=True,
-    system_prompt="vicuna_v1.1",
+    "meta-llama/Llama-2-7b-chat-hf",
     torch_dtype=torch.bfloat16,
 )
 
-conversation, last_response = generator.conversation_from_user_prompts(
+conversation = generator.conversation_from_user_prompts(
     texts,
     do_sample=True,
     top_p=0.95,
     temperature=0.1,
     max_new_tokens=512,
-    return_conversation=True,
-    return_last_response=True,
 )
 
 print("Conversation:")
-print(conversation)
-
-print("Last response:")
-print(last_response)
+pprint(conversation)

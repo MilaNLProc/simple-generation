@@ -26,7 +26,7 @@ pip install git+https://github.com/MilaNLProc/simple-generation.git
 - auto find best batch size (`batch_size="auto"`, `starting_batch_size=512`)
 - torch.compile the model for speed (`compile_model=True`)
 - load and attach LoRA weights (`lora_weights=...`)
-- system prompt templates for modern chat models (`system_prompts="llama-2"`) using [FastChat](https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py)
+- chat templates for modern chat models (`apply_chat_template=True`)
 - carbon emission estimates using [codecarbon](https://mlco2.github.io/codecarbon/)
 - sparsity and fused kernels for speed with [optimum](https://huggingface.co/docs/optimum/main/en/index) (`use_bettertransformer=True`)
 - DDP for single-node, multi-gpu setups using [accelerate](https://github.com/huggingface/accelerate). See [Distributed Inference](#distributed-inference)
@@ -52,7 +52,7 @@ texts = [
     "Tell me what's 2 + 2.",
     "Translate the following sentence to Spanish: I went to the supermarket to buy a lighter."
 ]
-responses = generator(texts)
+responses = generator(texts, apply_chat_template=True)
 ```
 
 The `__call__` function accepts several named arguments (see examples below). For example:
@@ -72,7 +72,7 @@ The `__call__` function accepts several named arguments (see examples below). Fo
 
 ### What Is Not Supported
 
-- frameworks other than torch
+- frameworks other than `torch`
 - models not in the Huggingface Hub
 - example-specific decoding parameters (i.e., given a batch of samples passed to the `__call__`, we will apply the same set of parameters for every sample)
 
@@ -90,7 +90,7 @@ texts = [
     "Today is a great day to run a bit. Translate this to Spanish?",
     "Today is a great day to run a bit. Translate this to German?",
 ]
-responses = gen(texts, max_new_tokens=128, do_sample=False, num_beams=4)
+responses = gen(texts, max_new_tokens=128, do_sample=False, num_beams=4, skip_prompt=False)
 ```
 
 The script will generate a `emissions.csv` file with estimated emissions.
@@ -119,21 +119,12 @@ This code will, in sequence:
 - attach Alpaca LoRA weights to it
 - run inference on the given texts finding the largest batch size fitting the available resources
 
-### System Templates
+### Chat Templates
 
-We support various system templates that can be used to format a prompt accordingly. To get the list of supported options, use:
+Starting from v0.2.0, we leverage Hugging Face's [chat templating system](https://huggingface.co/docs/transformers/chat_templating). You can activate it by using `apply_chat_template=True` when invoking `__call__`.
+You can also enable the generation prompt by setting `add_generation_prompt=True`. See [here](https://huggingface.co/docs/transformers/chat_templating#what-are-generation-prompts) why that might be a good idea.
 
-```python
->>> from simple_generation import available_system_prompts
->>> available_system_prompts()
-```
-
-List of supported templates (updated on August the 1st, 2023):
-```bash
-['Robin', 'airoboros_v1', 'alpaca', 'baichuan-chat', 'baize', 'bard', 'billa', 'chatglm', 'chatglm2', 'chatgpt', 'claude', 'cutegpt', 'dolly_v2', 'falcon', 'h2ogpt', 'internlm-chat', 'koala_v1', 'llama-2', 'manticore', 'mpt-30b-chat', 'mpt-30b-instruct', 'mpt-7b-chat', 'oasst_llama', 'oasst_pythia', 'openbuddy', 'phoenix', 'polyglot_changgpt', 'redpajama-incite', 'rwkv', 'snoozy', 'stablelm', 'starchat', 'tigerbot', 'tulu', 'vicuna_one_shot', 'vicuna_v1.1', 'vicuna_zero_shot', 'xgen']
-```
-
-To use them you have to use one of the identifiers in the constructor and then run inference as usual. See the [llama2_template example](./examples/llama2_template.py).
+**Note: chat templates are not enabled by default!.**
 
 ### Multiple-Request Conversation
 
@@ -154,7 +145,6 @@ texts = [
 generator = SimpleGenerator(
     "lmsys/vicuna-7b-v1.3",
     load_in_8bit=True,
-    system_prompt="vicuna_v1.1",
     torch_dtype=torch.bfloat16,
 )
 
