@@ -1,29 +1,6 @@
 Welcome to Simple Generation's documentation!
 ======================================
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+This is a very simple documentation. Please find below the main class you can instantiate.
 
-   readme
-   installation
-   usage
-   modules
-   contributing
-   authors
-   history
-
-Indices and tables
-==================
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-
-Reference
-=========
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
-
-   reference
+.. autoclass:: SimpleGenerator
