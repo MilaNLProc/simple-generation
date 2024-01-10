@@ -30,25 +30,6 @@ inference_decorator = (
 )
 
 
-@dataclasses.dataclass
-class DefaultGenerationConfig(GenerationConfig):
-    """Default generation config.
-
-    We apply this parameters to any .generate() call, unless they are not overridden.
-    """
-
-    max_new_tokens: int = 512
-    do_sample: bool = True  # set to False for greedy decoding
-    temperature: float = 0.7
-    top_p: float = 1.0
-    top_k: int = 50
-    num_return_sequences: int = 1
-    # num_beams: int = 1
-    # early_stopping: bool = False
-    # repetition_penalty: float = 1.0
-    # typical_p: float = 1.0
-    # penalty_alpha: float = 0.2
-    # length_penalty: int = 1.2
 
 
 class SimpleGenerator:
@@ -457,3 +438,24 @@ class SimpleGenerator:
             )
             for t in texts
         ]
+
+
+@dataclasses.dataclass
+class DefaultGenerationConfig(GenerationConfig):
+    """Default generation configuration.
+
+    We apply this parameters to any .generate() call, unless they are not overridden.
+    """
+
+    max_new_tokens: int = 512
+    do_sample: bool = True  # set to False for greedy decoding
+    temperature: float = 0.7
+    top_p: float = 1.0
+    top_k: int = 50
+    num_return_sequences: int = 1
+    # num_beams: int = 1
+    # early_stopping: bool = False
+    # repetition_penalty: float = 1.0
+    # typical_p: float = 1.0
+    # penalty_alpha: float = 0.2
+    # length_penalty: int = 1.2

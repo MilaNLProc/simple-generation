@@ -3,5 +3,10 @@ Welcome to Simple Generation's documentation!
 
 This is a very simple documentation! Please find below the main class you can instantiate.
 
-.. automodule:: simple_generation.simple_generation
+.. autoclass:: simple_generation.SimpleGenerator
     :members:
+    :special-members: __init__, __call__
+
+.. autodata:: simple_generation.DefaultGenerationConfig
+
+"""
