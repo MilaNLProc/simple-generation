@@ -455,10 +455,19 @@ class DefaultGenerationConfig(GenerationConfig):
     """Default generation configuration.
 
     We apply this parameters to any .generate() call, unless they are not overridden.
+
+    Attributes:
+        max_new_tokens (int): The maximum number of tokens to generate. Defaults to 512.
+        do_sample (bool): Whether to use sampling or greedy decoding. Defaults to True.
+        temperature (float): The sampling temperature. Defaults to 0.7.
+        top_p (float): The cumulative probability for sampling from the top_p distribution. Defaults to 1.0.
+        top_k (int): The number of highest probability vocabulary tokens to keep for top-k-filtering. Defaults to 50.
+        num_return_sequences (int): The number of independently computed returned sequences for each element in the batch. Defaults to 1.
+        
     """
 
     max_new_tokens: int = 512
-    do_sample: bool = True  # set to False for greedy decoding
+    do_sample: bool = True
     temperature: float = 0.7
     top_p: float = 1.0
     top_k: int = 50
