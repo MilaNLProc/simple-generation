@@ -126,6 +126,26 @@ You can also enable the generation prompt by setting `add_generation_prompt=True
 
 **Note: chat templates are not enabled by default!.**
 
+### Simple Translation
+
+This is the minimum code to translate the En->It EuroParl split using a Opus MT neural model.
+
+```python
+generator = SimpleGenerator("Helsinki-NLP/opus-mt-en-it")
+
+dataset = load_dataset("europarl_bilingual", lang1="en", lang2="it")["train"]
+texts = [sample["translation"]["en"] for sample in dataset]
+references = [sample["translation"]["it"] for sample in dataset]
+
+output = generator(
+    texts,
+    skip_prompt=False,
+    num_beams=5,
+    max_new_tokens=256,
+    starting_batch_size=128,
+)
+```
+
 ### Multiple-Request Conversation
 
 The library supports creating a conversation by prompting models with multiple requests. I.e., it is possible to build a multi-turn conversation with fixed user requests. You can use the `conversation_from_user_prompts()` method, that accepts the same arguments of `__call__`.

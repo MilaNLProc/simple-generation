@@ -76,6 +76,7 @@ class SimpleGenerator:
         # Use accelerator to distribute model if DDP is enabled
         self.accelerator = Accelerator(device_placement=True)
         self.device = self.accelerator.device
+        logger.info(f"accelerate found device {self.device}. Using it by default.")
 
         # Load config and inspect whether the model is a seq2seq or causal LM
         config = None
@@ -144,18 +145,30 @@ class SimpleGenerator:
 
         # By default we use HF's smart device placement strategy for model weights
         if "device_map" not in model_kwargs and not self.is_ddp:
-            logger.info("Setting the device map to 'auto' since not specified")
+            logger.info("Setting 'device_map' to 'auto' since it was not specified.")
             model_kwargs["device_map"] = "auto"
+
+        move_to_accelerate_device = False
         try:
             self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
+        except Exception as e:
+            """
+            Some models do not accept the device_map argument and setting it to 'auto' by default causes loading to crash.
+            We try to load the model again without it.
 
-            if self.is_ddp:
-                self.model.to(self.device)
-                logger.debug(f"Sending model to {self.device}")
-        except:
+            With no device_map, the model is loaded in cpu. We still force-move it to the
+            device found by accelerate (e.g., `cuda`, if it is available).
+            """
+            logger.info(f"The following exception arise when loading the model: {e}")
+            logger.info(f"Trying to load the model again with no `device_map='auto'`")
             model_kwargs.pop("device_map")
-            logger.debug("Removig device_map and trying loading model again")
+
             self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
+            move_to_accelerate_device = True
+
+        if self.is_ddp or move_to_accelerate_device:
+            self.model.to(self.device)
+            logger.debug(f"Moving model to {self.device}")
 
         if lora_weights:
             logger.info("Attaching LoRA weights to the model")
@@ -183,12 +196,22 @@ class SimpleGenerator:
 
         self.model.eval()
 
-        logger.info(f"""
-            Initialization completed!
-            - use_bettertransformer: {use_bettertransformer},
-            - compile_model: {compile_model},
-            - 
+        print(
+            f"""
+            Simple Generation initialization completed!
 
+            Model placement:
+            - device_map: {model_kwargs.pop('device_map', None)},
+            - device: {self.device},
+
+            DDP:
+            - distributed inference: {self.is_ddp},
+
+            Model info:
+            - is_encoder_decoder: {self.is_encoder_decoder},
+            - lora_weights: {lora_weights},
+            - use_bettertransformer: {use_bettertransformer},
+            - compile_model: {compile_model}
             """
         )
 
