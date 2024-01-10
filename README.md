@@ -23,7 +23,7 @@ pip install git+https://github.com/MilaNLProc/simple-generation.git
 
 - any model that can be loaded with `AutoModelForCausalLM` or `AutoModelForSeq2SeqLM`
 - batched inference for speed (`batch_size=256`)
-- auto find best batch size (`batch_size="auto"`, `starting_batch_size=512`)
+- auto find the largest batch size fitting in your accelerator (`batch_size="auto"`, `starting_batch_size=512`)
 - torch.compile the model for speed (`compile_model=True`)
 - load and attach LoRA weights (`lora_weights=...`)
 - chat templates for modern chat models (`apply_chat_template=True`)
