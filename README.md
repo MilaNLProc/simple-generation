@@ -1,5 +1,8 @@
 ![Simple Generation Dining](/docs/_static/banner.png)
 
+[![Latest PyPI version](https://img.shields.io/pypi/v/simple-generation.svg)](https://pypi.python.org/pypi/simple-generation)
+[![downloads badge](https://pepy.tech/badge/simple-generation/month)](https://pepy.tech/project/simple-generation)
+
 # Simple Generation
 
 Simple Generation offers a minimal interface to run text generation with HuggingFace checkpoint.
