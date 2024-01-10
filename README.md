@@ -1,6 +1,7 @@
 ![Simple Generation Dining](/docs/_static/banner.png)
 
 [![Latest PyPI version](https://img.shields.io/pypi/v/simple-generation.svg)](https://pypi.python.org/pypi/simple-generation)
+[![Documentation Status](https://readthedocs.org/projects/simple-generation/badge/?version=latest)](https://simple-generation.readthedocs.io/en/latest/?version=latest)
 [![downloads badge](https://pepy.tech/badge/simple-generation/month)](https://pepy.tech/project/simple-generation)
 
 # Simple Generation
