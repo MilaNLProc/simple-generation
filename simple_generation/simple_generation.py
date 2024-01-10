@@ -52,16 +52,23 @@ class DefaultGenerationConfig(GenerationConfig):
 
 
 class SimpleGenerator:
+    """
+    SimpleGenerator is a wrapper around Hugging Face's Transformers library that allows for easy generation of text from a given prompt.
+    """
+
     @property
     def local_rank(self):
+        """Returns the local rank of the process. If not in DDP, returns 0."""
         return dist.get_rank() if self.is_ddp else 0
 
     @property
     def is_ddp(self):
+        """Returns True if the model is distributed."""
         return dist.is_available() and dist.is_initialized()
 
     @property
     def is_main_process(self):
+        """Returns True if the process is the main process."""
         return self.accelerator.is_main_process
 
     def __init__(
@@ -73,6 +80,20 @@ class SimpleGenerator:
         use_bettertransformer=False,
         **model_kwargs,
     ):
+        """Initialize the SimpleGenerator.
+
+        Args:
+            model_name_or_path (str): The model name or path to load from.
+            tokenizer_name_or_path (str, optional): The tokenizer name or path to load from. Defaults to None, in which case it will be set to the model_name_or_path.
+            lora_weights (str, optional): The path to the LoRA weights. Defaults to None.
+            compile_model (bool, optional): Whether to torch.compile() the model. Defaults to False.
+            use_bettertransformer (bool, optional): Whether to transform the model with BetterTransformers. Defaults to False.
+            **model_kwargs: Any other keyword arguments will be passed to the model's from_pretrained() method.
+
+        Returns:
+            SimpleGenerator: The SimpleGenerator object.
+        """
+
         # Use accelerator to distribute model if DDP is enabled
         self.accelerator = Accelerator(device_placement=True)
         self.device = self.accelerator.device
@@ -235,7 +256,6 @@ class SimpleGenerator:
 
         conversation = list()
         for user_prompt in tqdm(user_prompts, desc="Turns"):
-
             conversation.append({"role": "user", "content": user_prompt})
             conv_text = self.tokenizer.apply_chat_template(
                 conversation, tokenize=False, add_generation_prompt=True
@@ -270,6 +290,23 @@ class SimpleGenerator:
         add_generation_prompt=False,
         **generation_kwargs,
     ):
+        """Generate text from a given prompt.
+
+        Args:
+            texts (str or List[str]): The text prompt(s) to generate from.
+            batch_size (int, optional): The batch size to use for generation. Defaults to "auto", in which case it will be found automatically.
+            starting_batch_size (int, optional): The starting batch size to use for finding the optimal batch size. Defaults to 256.
+            num_workers (int, optional): The number of workers to use for the DataLoader. Defaults to 4.
+            skip_prompt (bool, optional): Whether to skip the initial prompt when returning the generated text. Defaults to False. Set it to False if you are using a sequence to sequence model.
+            log_batch_sample (int, optional): If >0, every log_batch_sample batches the output text will be logged. Defaults to -1.
+            show_progress_bar (bool, optional): Whether to show the progress bar. Defaults to True.
+            apply_chat_template (bool, optional): Whether to apply the chat template to the prompts. Defaults to False.
+            add_generation_prompt (bool, optional): Whether to add the generation prompt to the prompts. Defaults to False.
+            **generation_kwargs: Any other keyword arguments will be passed to the model's generate() method.
+
+        Returns:
+            str or List[str]: The generated text(s).
+        """
         # make texts a list if it's not
         if not isinstance(texts, list):
             logger.debug("Texts is not a list. Wrapping it in a list.")
