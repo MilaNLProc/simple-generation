@@ -73,6 +73,10 @@ class SimpleGenerator:
 
         Returns:
             SimpleGenerator: The SimpleGenerator object.
+
+        Examples:
+            >>> from simple_generation import SimpleGenerator
+            >>> generator = SimpleGenerator("meta-llama/Llama-2-7b-chat-hf", apply_chat_template=True)
         """
 
         # Use accelerator to distribute model if DDP is enabled
@@ -287,6 +291,12 @@ class SimpleGenerator:
 
         Returns:
             str or List[str]: The generated text(s).
+
+        Examples:
+            >>> from simple_generation import SimpleGenerator
+            >>> generator = SimpleGenerator("meta-llama/Llama-2-7b-chat-hf", apply_chat_template=True)
+            >>> generator("Tell me what's 2 + 2.", max_new_tokens=16, do_sample=True, top_k=50, skip_prompt=True)
+            "The answer is 4."
         """
         # make texts a list if it's not
         if not isinstance(texts, list):
