@@ -4,9 +4,9 @@ Example: Machine Translation
 This script contains the minimum code to translate the En->It split of the EuroParl dataset
 using a Opus MT model and Simple Generation.
 """
-import pandas as pd
 import torch
 from datasets import load_dataset
+from pprint import pprint
 
 from simple_generation import SimpleGenerator
 
@@ -19,8 +19,8 @@ dataset = load_dataset("europarl_bilingual", lang1="en", lang2="it")["train"].se
 texts = [sample["translation"]["en"] for sample in dataset]
 references = [sample["translation"]["it"] for sample in dataset]
 
-print(len(texts))
-print("Some texts", texts[:3])
+pprint("Some texts:")
+pprint(texts[:3])
 
 output = generator(
     texts,
