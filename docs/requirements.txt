@@ -9,3 +9,7 @@ pyopenssl>=23.2.0
 optimum>=1.9.0
 codecarbon>=2.1.4
 scipy>=1.10.1
+sphinx-toggleprompt>=0.3.1
+sphinx-copybutton>=0.5.1
+sphinx-favicon>=1.0.1
+pydata_sphinx_theme>=0.12.0
