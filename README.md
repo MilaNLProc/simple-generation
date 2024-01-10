@@ -2,7 +2,7 @@
 
 # Simple Generation
 
-Simple Generator offers a minimal interface to run text generation with HuggingFace checkpoint.
+Simple Generation offers a minimal interface to run text generation with HuggingFace checkpoint.
 The core idea is to ship many neat features out of the box and avoid boilerplate.
 
 This is mainly for personal use and simple hardware setups (ideally, single-node single- or multi-gpu).
@@ -124,7 +124,7 @@ This code will, in sequence:
 Starting from v0.2.0, we leverage Hugging Face's [chat templating system](https://huggingface.co/docs/transformers/chat_templating). You can activate it by using `apply_chat_template=True` when invoking `__call__`.
 You can also enable the generation prompt by setting `add_generation_prompt=True`. See [here](https://huggingface.co/docs/transformers/chat_templating#what-are-generation-prompts) why that might be a good idea.
 
-**Note: chat templates are not enabled by default!.**
+**Note: chat templates are not enabled by default!**
 
 ### Simple Translation
 
