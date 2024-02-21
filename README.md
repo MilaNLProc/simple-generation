@@ -134,6 +134,8 @@ You can also enable the generation prompt by setting `add_generation_prompt=True
 ### Chat Interface
 
 The main SimpleGenerator class exposes the method `gui()`. If invoked, it fires up a local chat interface to interact with the model.
+Note that, since everything will run locally, you can fill up your VRAM quite easily with long chats. Keep an eye on your VRAM usage and clean the chat frequently -- you might notice that memory does not get freed up immediately, but cleaning the chat will reuse the already allocated memory for new chats.
+
 
 ```python
 model_name = "mistralai/Mistral-7B-Instruct-v0.2"
