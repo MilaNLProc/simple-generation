@@ -4,8 +4,9 @@ import torch
 
 from simple_generation import SimpleGenerator
 
-model_name = "meta-llama/Llama-2-7b-chat-hf"
-generator = SimpleGenerator(model_name, torch_dtype=torch.bfloat16)
+# model_name = "meta-llama/Llama-2-7b-chat-hf"
+model_name = "mistralai/Mistral-7B-Instruct-v0.2"
+generator = SimpleGenerator(model_name, torch_dtype=torch.bfloat16, device="cuda:5")
 
 texts = (
     [
@@ -29,10 +30,11 @@ gen = generator(
     skip_prompt=True,
     do_sample=True,
     max_new_tokens=256,
-    temperature=0,
-    top_p=0.05,
+    temperature=0.8,
+    top_p=0.85,
     top_k=50,
     starting_batch_size=16,
+    apply_chat_template=True,
 )
 
 assert len(gen) == len(texts)

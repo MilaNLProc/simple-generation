@@ -25,15 +25,16 @@ pip install git+https://github.com/MilaNLProc/simple-generation.git
 
 ## Features
 
-- any model that can be loaded with `AutoModelForCausalLM` or `AutoModelForSeq2SeqLM`
+- generate with any model that can be loaded with `AutoModelForCausalLM` or `AutoModelForSeq2SeqLM`
 - batched inference for speed (`batch_size=256`)
 - auto find the largest batch size fitting in your accelerator (`batch_size="auto"`, `starting_batch_size=512`)
 - torch.compile the model for speed (`compile_model=True`)
 - load and attach LoRA weights (`lora_weights=...`)
-- chat templates for modern chat models (`apply_chat_template=True`)
+- chat templates for modern chat models (`apply_chat_template=True` in `__call__`)
 - carbon emission estimates using [codecarbon](https://mlco2.github.io/codecarbon/)
 - sparsity and fused kernels for speed with [optimum](https://huggingface.co/docs/optimum/main/en/index) (`use_bettertransformer=True`)
 - DDP for single-node, multi-gpu setups using [accelerate](https://github.com/huggingface/accelerate). See [Distributed Inference](#distributed-inference)
+- GUI for quick interaction with models using Gradio's [ChatInterface](https://www.gradio.app/guides/creating-a-chatbot-fast#customizing-your-chatbot). See [Chat Interface](#chat-interface)
 
 **Loading a Model**
 
@@ -56,7 +57,7 @@ texts = [
     "Tell me what's 2 + 2.",
     "Translate the following sentence to Spanish: I went to the supermarket to buy a lighter."
 ]
-responses = generator(texts, apply_chat_template=True)
+responses = generator(texts, apply_chat_template=True, add_generation_prompt=True)
 ```
 
 The `__call__` function accepts several named arguments (see examples below). For example:
@@ -70,7 +71,7 @@ The `__call__` function accepts several named arguments (see examples below). Fo
 - efficient duplicate and quasi-duplicate removal
 - ~~support system prompt chat formatting following standard templates (e.g., Vicuna, LLaMA 2)~~
 - support auto gptq quantized models and tentatively GGML
-- spawn web app to quickly local test conversation with gradio
+- ~~spawn web app to quickly local test conversation with gradio~~
 - even faster inference engine with [vllm](https://vllm.ai/)
 - ~~distributed inference for single-node, multi-gpu setups~~
 
@@ -129,6 +130,23 @@ Starting from v0.2.0, we leverage Hugging Face's [chat templating system](https:
 You can also enable the generation prompt by setting `add_generation_prompt=True`. See [here](https://huggingface.co/docs/transformers/chat_templating#what-are-generation-prompts) why that might be a good idea.
 
 **Note: chat templates are not enabled by default!**
+
+### Chat Interface
+
+The main SimpleGenerator class exposes the method `gui()`. If invoked, it fires up a local chat interface to interact with the model.
+
+```python
+model_name = "mistralai/Mistral-7B-Instruct-v0.2"
+generator = SimpleGenerator(model_name, torch_dtype=torch.bfloat16, device="cuda:0")
+
+generator.gui(
+    do_sample=True,
+    max_new_tokens=256,
+    temperature=0.8,
+    top_p=0.85,
+    top_k=50,
+)
+```
 
 ### Simple Translation
 
@@ -254,6 +272,7 @@ CUDA_VISIBLE_DEVICES=0,1 python examples/inference.py
 CUDA_VISIBLE_DEVICES=0,1 accelerate launch --num_processes 2 examples/inference.py
 >> 105s
 ```
+
 
 ## Defaults
 

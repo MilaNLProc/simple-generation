@@ -1,4 +1,5 @@
 """Main module."""
+
 import dataclasses
 from typing import List, Dict
 
@@ -28,8 +29,6 @@ logger = get_logger(__name__)
 inference_decorator = (
     torch.inference_mode if torch.__version__ >= "2.0.0" else torch.no_grad
 )
-
-
 
 
 class SimpleGenerator:
@@ -78,11 +77,17 @@ class SimpleGenerator:
             >>> from simple_generation import SimpleGenerator
             >>> generator = SimpleGenerator("meta-llama/Llama-2-7b-chat-hf", apply_chat_template=True)
         """
+        self.model_name_or_path = model_name_or_path
 
         # Use accelerator to distribute model if DDP is enabled
         self.accelerator = Accelerator(device_placement=True)
         self.device = self.accelerator.device
-        logger.info(f"accelerate found device {self.device}. Using it by default.")
+        user_request_move_to_device = False
+
+        if "device" in model_kwargs:
+            logger.info(f"Setting device to {self.device} per user's request.")
+            self.device = model_kwargs.pop("device")
+            user_request_move_to_device = True
 
         # Load config and inspect whether the model is a seq2seq or causal LM
         config = None
@@ -149,30 +154,9 @@ class SimpleGenerator:
             logger.warning("Could not load generation config. Using default one.")
             self.generation_config = DefaultGenerationConfig()
 
-        # By default we use HF's smart device placement strategy for model weights
-        if "device_map" not in model_kwargs and not self.is_ddp:
-            logger.info("Setting 'device_map' to 'auto' since it was not specified.")
-            model_kwargs["device_map"] = "auto"
+        self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
 
-        move_to_accelerate_device = False
-        try:
-            self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
-        except Exception as e:
-            """
-            Some models do not accept the device_map argument and setting it to 'auto' by default causes loading to crash.
-            We try to load the model again without it.
-
-            With no device_map, the model is loaded in cpu. We still force-move it to the
-            device found by accelerate (e.g., `cuda`, if it is available).
-            """
-            logger.info(f"The following exception arise when loading the model: {e}")
-            logger.info(f"Trying to load the model again with no `device_map='auto'`")
-            model_kwargs.pop("device_map")
-
-            self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
-            move_to_accelerate_device = True
-
-        if self.is_ddp or move_to_accelerate_device:
+        if self.is_ddp or user_request_move_to_device:
             self.model.to(self.device)
             logger.debug(f"Moving model to {self.device}")
 
@@ -259,6 +243,38 @@ class SimpleGenerator:
 
         return conversation
 
+    def _prepare_generation_args(self, **generation_kwargs):
+        current_generation_args = self.generation_config.to_dict()
+
+        logger.info("Setting pad_token_id to eos_token_id for open-end generation")
+        current_generation_args["pad_token_id"] = self.tokenizer.eos_token_id
+        current_generation_args["eos_token_id"] = self.tokenizer.eos_token_id
+
+        # We fix when some model default to the outdated "max_length" parameter
+        if "max_length" in current_generation_args:
+            logger.info(
+                "Found 'max_length' in the model's default generation config. Setting this value to 'max_new_tokens' instead."
+            )
+            current_generation_args["max_new_tokens"] = current_generation_args.pop(
+                "max_length"
+            )
+
+        if len(generation_kwargs) > 0:
+            logger.info(
+                "Custom generation args passed. Any named parameters will override the same default one."
+            )
+            current_generation_args.update(generation_kwargs)
+
+        # Postprocess generation kwargs
+        if (
+            "temperature" in current_generation_args
+            and current_generation_args["temperature"] == 0
+        ):
+            logger.info("Temperature cannot be 0. Setting it to 1e-4.")
+            current_generation_args["temperature"] = 1e-4
+
+        return current_generation_args
+
     @track_emissions(log_level="error", measure_power_secs=60)
     @inference_decorator()
     def __call__(
@@ -312,35 +328,7 @@ class SimpleGenerator:
         if apply_chat_template:
             texts = self._apply_chat_template_user(texts, add_generation_prompt)
 
-        current_generation_args = self.generation_config.to_dict()
-
-        logger.info("Setting pad_token_id to eos_token_id for open-end generation")
-        current_generation_args["pad_token_id"] = self.tokenizer.eos_token_id
-        current_generation_args["eos_token_id"] = self.tokenizer.eos_token_id
-
-        # We fix when some model default to the outdated "max_length" parameter
-        if "max_length" in current_generation_args:
-            logger.info(
-                "Found 'max_length' in the model's default generation config. Setting this value to 'max_new_tokens' instead."
-            )
-            current_generation_args["max_new_tokens"] = current_generation_args.pop(
-                "max_length"
-            )
-
-        if len(generation_kwargs) > 0:
-            logger.info(
-                "Custom generation args passed. Any named parameters will override the same default one."
-            )
-            current_generation_args.update(generation_kwargs)
-
-        # Postprocess generation kwargs
-        if (
-            "temperature" in current_generation_args
-            and current_generation_args["temperature"] == 0
-        ):
-            logger.info("Temperature cannot be 0. Setting it to 1e-4.")
-            current_generation_args["temperature"] = 1e-4
-
+        current_generation_args = self._prepare_generation_args(**generation_kwargs)
         logger.debug("Generation args:", current_generation_args)
 
         # Processing the input text
@@ -449,6 +437,51 @@ class SimpleGenerator:
             for t in texts
         ]
 
+    def gui(self, **generation_kwargs):
+        """Start a GUI for the model."""
+        import gradio as gr
+        from transformers import TextIteratorStreamer
+        from threading import Thread
+
+        def _chat(message, history):
+            messages = list()
+            for user_prompt, model_response in history:
+                messages.append({"role": "user", "content": user_prompt})
+                messages.append({"role": "assistant", "content": model_response})
+            messages.append({"role": "user", "content": message})
+
+            tokenized_chat = self.tokenizer.apply_chat_template(
+                messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
+            ).to(self.device)
+
+            streamer = TextIteratorStreamer(
+                self.tokenizer, timeout=10.0, skip_prompt=True, skip_special_tokens=True
+            )
+            current_generation_args = self._prepare_generation_args(**generation_kwargs)
+
+            gen_args = dict(
+                inputs=tokenized_chat,
+                streamer=streamer,
+                **current_generation_args,
+            )
+
+            t = Thread(target=self.model.generate, kwargs=gen_args)
+            t.start()
+            partial_message = ""
+            for new_token in streamer:
+                if new_token != "<":
+                    partial_message += new_token
+                    yield partial_message
+
+        interface = gr.ChatInterface(
+            _chat,
+            # chatbot=gr.Chatbot(height=300),
+            title=f"Chat with {self.model_name_or_path.split('/')[-1]}",
+            description="Generation arguments: " + str(generation_kwargs),
+            # fill_vertical_space=True, # this needs an upcoming gradio release
+        )
+        interface.launch()
+
 
 @dataclasses.dataclass
 class DefaultGenerationConfig(GenerationConfig):
@@ -463,7 +496,7 @@ class DefaultGenerationConfig(GenerationConfig):
         top_p (float): The cumulative probability for sampling from the top_p distribution. Defaults to 1.0.
         top_k (int): The number of highest probability vocabulary tokens to keep for top-k-filtering. Defaults to 50.
         num_return_sequences (int): The number of independently computed returned sequences for each element in the batch. Defaults to 1.
-        
+
     """
 
     max_new_tokens: int = 512
