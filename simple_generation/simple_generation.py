@@ -334,7 +334,7 @@ class SimpleGenerator:
         # Processing the input text
         dataset = Dataset.from_dict({"text": texts})
         dataset = dataset.map(
-            lambda x: self.tokenizer(x["text"]),
+            lambda x: self.tokenizer(x["text"], truncation=True),
             batched=True,
             remove_columns=["text"],
             desc="Tokenizing texts",
