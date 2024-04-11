@@ -111,7 +111,7 @@ class SimpleVLMGenerator:
         # batch_size="auto",
         # starting_batch_size=256,
         # num_workers=4,
-        # skip_prompt=False,
+        skip_prompt=False,
         # log_batch_sample=-1,
         show_progress_bar=None,
         # prepare_prompts=False,  # keeping it here for consistency
@@ -163,6 +163,8 @@ class SimpleVLMGenerator:
             # current_generation_args = self._prepare_generation_args(**generation_kwargs)
 
             output = self.model.generate(**inputs, **generation_kwargs)
+            if skip_prompt:
+                output = output[:, len(inputs["input_ids"][0]) :]
 
             decoded = self.processor.decode(output[0], skip_special_tokens=True)
             outputs.append(decoded)
