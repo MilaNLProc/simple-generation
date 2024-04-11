@@ -6,6 +6,7 @@ from transformers import (
     GenerationConfig,
     AutoProcessor,
     LlavaNextForConditionalGeneration,
+    IdeficsForVisionText2Text,
 )
 from accelerate import Accelerator
 from accelerate.logging import get_logger
@@ -15,12 +16,19 @@ import PIL
 import dataclasses
 from typing import List, Union
 from tqdm import tqdm
+from enum import Enum
+from .config import IdeficsHelper
 
 logger = get_logger(__name__)
 
 inference_decorator = (
     torch.inference_mode if torch.__version__ >= "2.0.0" else torch.no_grad
 )
+
+
+class VLMType(Enum):
+    LLAVA = 0
+    IDEFICS = 1
 
 
 @dataclasses.dataclass
@@ -78,6 +86,10 @@ class SimpleVLMGenerator:
 
         if "llava" in self.model_name_or_path.lower():
             model_cls = LlavaNextForConditionalGeneration
+            self.vlm_type = VLMType.LLAVA
+        elif "idefics" in self.model_name_or_path.lower():
+            model_cls = IdeficsForVisionText2Text
+            self.vlm_type = VLMType.IDEFICS
         else:
             raise NotImplementedError(f"We do not wrap {model_name_or_path} yet!")
 
@@ -151,18 +163,37 @@ class SimpleVLMGenerator:
             total=len(texts),
             disable=not show_progress_bar,
         ):
-            inputs = self.processor(
-                text,
-                image,
-                return_tensors="pt",
-                # apply_chat_template=apply_chat_template,
-                # add_generation_prompt=add_generation_prompt,
-            )
-            inputs = inputs.to(self.model.device)
 
-            # current_generation_args = self._prepare_generation_args(**generation_kwargs)
+            if self.vlm_type == VLMType.LLAVA:
+                inputs = self.processor(
+                    text,
+                    image,
+                    return_tensors="pt",
+                    # apply_chat_template=apply_chat_template,
+                    # add_generation_prompt=add_generation_prompt,
+                ).to(self.model.device)
+                # current_generation_args = self._prepare_generation_args(**generation_kwargs)
+                output = self.model.generate(**inputs, **generation_kwargs)
+            elif self.vlm_type == VLMType.IDEFICS:
+                prompt = IdeficsHelper.apply_chat_template(image, text)
+                inputs = self.processor(
+                    prompt, add_end_of_utterance_token=False, return_tensors="pt"
+                ).to(self.model.device)
+                exit_condition = self.processor.tokenizer(
+                    "<end_of_utterance>", add_special_tokens=False
+                ).input_ids
+                bad_words_ids = self.processor.tokenizer(
+                    ["<image>", "<fake_token_around_image>"], add_special_tokens=False
+                ).input_ids
+                output = self.model.generate(
+                    **inputs,
+                    eos_token_id=exit_condition,
+                    bad_words_ids=bad_words_ids,
+                    **generation_kwargs,
+                )
+            else:
+                RuntimeError()
 
-            output = self.model.generate(**inputs, **generation_kwargs)
             if skip_prompt:
                 output = output[:, len(inputs["input_ids"][0]) :]
 
