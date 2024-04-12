@@ -5,8 +5,11 @@ import torch.distributed as dist
 from transformers import (
     GenerationConfig,
     AutoProcessor,
+    AutoTokenizer,
     LlavaNextForConditionalGeneration,
     IdeficsForVisionText2Text,
+    Blip2ForConditionalGeneration,
+    AutoModelForCausalLM,
 )
 from accelerate import Accelerator
 from accelerate.logging import get_logger
@@ -27,32 +30,34 @@ inference_decorator = (
 
 
 class VLMType(Enum):
-    LLAVA = 0
-    IDEFICS = 1
+    LLAVA = "LLAVA"
+    IDEFICS = "IDEFICS"
+    QWEN = "QWEN"
+    BLIP2 = "BLIP2"
 
 
-@dataclasses.dataclass
-class DefaultGenerationConfig(GenerationConfig):
-    """Default generation configuration.
+# @dataclasses.dataclass
+# class DefaultGenerationConfig(GenerationConfig):
+#     """Default generation configuration.
 
-    We apply this parameters to any .generate() call, unless they are not overridden.
+#     We apply this parameters to any .generate() call, unless they are not overridden.
 
-    Attributes:
-        max_new_tokens (int): The maximum number of tokens to generate. Defaults to 512.
-        do_sample (bool): Whether to use sampling or greedy decoding. Defaults to True.
-        temperature (float): The sampling temperature. Defaults to 0.7.
-        top_p (float): The cumulative probability for sampling from the top_p distribution. Defaults to 1.0.
-        top_k (int): The number of highest probability vocabulary tokens to keep for top-k-filtering. Defaults to 50.
-        num_return_sequences (int): The number of independently computed returned sequences for each element in the batch. Defaults to 1.
+#     Attributes:
+#         max_new_tokens (int): The maximum number of tokens to generate. Defaults to 512.
+#         do_sample (bool): Whether to use sampling or greedy decoding. Defaults to True.
+#         temperature (float): The sampling temperature. Defaults to 0.7.
+#         top_p (float): The cumulative probability for sampling from the top_p distribution. Defaults to 1.0.
+#         top_k (int): The number of highest probability vocabulary tokens to keep for top-k-filtering. Defaults to 50.
+#         num_return_sequences (int): The number of independently computed returned sequences for each element in the batch. Defaults to 1.
 
-    """
+#     """
 
-    max_new_tokens: int = 512
-    do_sample: bool = True
-    temperature: float = 0.7
-    top_p: float = 1.0
-    top_k: int = 50
-    num_return_sequences: int = 1
+#     max_new_tokens: int = 512
+#     do_sample: bool = True
+#     temperature: float = 0.7
+#     top_p: float = 1.0
+#     top_k: int = 50
+#     num_return_sequences: int = 1
 
 
 class SimpleVLMGenerator:
@@ -64,6 +69,29 @@ class SimpleVLMGenerator:
     def __init__(self, model_name_or_path, **model_kwargs):
         self.model_name_or_path = model_name_or_path
 
+        # Per-Model configuration
+        if "llava" in self.model_name_or_path.lower():
+            model_cls = LlavaNextForConditionalGeneration
+            self.vlm_type = VLMType.LLAVA
+            # self.processor = AutoProcessor.from_pretrained(self.model_name_or_path)
+        elif "idefics" in self.model_name_or_path.lower():
+            model_cls = IdeficsForVisionText2Text
+            self.vlm_type = VLMType.IDEFICS
+            # self.processor = AutoProcessor.from_pretrained(self.model_name_or_path)
+        elif "blip" in self.model_name_or_path.lower():
+            model_cls = Blip2ForConditionalGeneration
+            self.vlm_type = VLMType.BLIP2
+            # self.processor = AutoProcessor.from_pretrained(self.model_name_or_path)
+        elif "qwen" in self.model_name_or_path.lower():
+            raise NotImplementedError()
+            model_cls = AutoModelForCausalLM
+            self.vlm_type = VLMType.QWEN
+            self.processor = AutoTokenizer.from_pretrained(self.model_name_or_path)
+        else:
+            raise NotImplementedError(f"We do not wrap {model_name_or_path} yet!")
+
+        self.processor = AutoProcessor.from_pretrained(self.model_name_or_path)
+
         # Use accelerator to distribute model if DDP is enabled
         self.accelerator = Accelerator(device_placement=True)
         self.device = self.accelerator.device
@@ -74,24 +102,13 @@ class SimpleVLMGenerator:
             self.device = model_kwargs.pop("device")
             user_request_move_to_device = True
 
-        self.processor = AutoProcessor.from_pretrained(self.model_name_or_path)
-
-        try:
-            self.generation_config = GenerationConfig.from_pretrained(
-                model_name_or_path
-            )
-        except Exception as e:
-            logger.warning("Could not load generation config. Using default one.")
-            self.generation_config = DefaultGenerationConfig()
-
-        if "llava" in self.model_name_or_path.lower():
-            model_cls = LlavaNextForConditionalGeneration
-            self.vlm_type = VLMType.LLAVA
-        elif "idefics" in self.model_name_or_path.lower():
-            model_cls = IdeficsForVisionText2Text
-            self.vlm_type = VLMType.IDEFICS
-        else:
-            raise NotImplementedError(f"We do not wrap {model_name_or_path} yet!")
+        # try:
+        #     self.generation_config = GenerationConfig.from_pretrained(
+        #         model_name_or_path
+        #     )
+        # except Exception as e:
+        #     logger.warning("Could not load generation config. Using default one.")
+        #     self.generation_config = DefaultGenerationConfig()
 
         self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
 
@@ -104,6 +121,10 @@ class SimpleVLMGenerator:
         print(
             f"""
             Simple Generation (VLM) initialization completed!
+
+            Model:
+            - id: {self.model_name_or_path},
+            - VLM type: {self.vlm_type}
 
             Model placement:
             - device_map: {model_kwargs.pop('device_map', None)},
@@ -135,6 +156,7 @@ class SimpleVLMGenerator:
         v1:
         - no support to batched inference
         - the user needs to take care of the input format
+        - support only single-turn inference, text and images at the same position in the input will be considered an input pair.
         """
 
         if not isinstance(texts, list):
@@ -174,6 +196,7 @@ class SimpleVLMGenerator:
                 ).to(self.model.device)
                 # current_generation_args = self._prepare_generation_args(**generation_kwargs)
                 output = self.model.generate(**inputs, **generation_kwargs)
+
             elif self.vlm_type == VLMType.IDEFICS:
                 prompt = IdeficsHelper.apply_chat_template(image, text)
                 inputs = self.processor(
@@ -191,6 +214,13 @@ class SimpleVLMGenerator:
                     bad_words_ids=bad_words_ids,
                     **generation_kwargs,
                 )
+
+            elif self.vlm_type == VLMType.BLIP2:
+                inputs = self.processor(image, text, return_tensors="pt").to(
+                    self.model.device
+                )
+                output = self.model.generate(**inputs, **generation_kwargs)
+
             else:
                 RuntimeError()
 
