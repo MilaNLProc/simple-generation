@@ -27,6 +27,8 @@ from .config import IdeficsHelper
 import math
 import numpy as np
 from datasets import Dataset
+from ..utils import DistributedEvalSampler
+
 
 logger = get_logger(__name__)
 
@@ -40,19 +42,6 @@ class VLMType(Enum):
     IDEFICS = "IDEFICS"
     QWEN = "QWEN"
     BLIP2 = "BLIP2"
-
-
-class VLMDataset(torch.utils.data.Dataset):
-    def __init__(self, processor, prompts: List[str], images) -> None:
-        self.processor = processor
-        self.prompts = prompts
-        self.images = images
-
-    def __len__(self):
-        return len(self.prompts)
-
-    def __getitem__(self, index) -> Dict:
-        pass
 
 
 # @dataclasses.dataclass
@@ -84,6 +73,11 @@ class SimpleVLMGenerator:
     def is_ddp(self):
         """Returns True if the model is distributed."""
         return dist.is_available() and dist.is_initialized()
+
+    @property
+    def local_rank(self):
+        """Returns the local rank of the process. If not in DDP, returns 0."""
+        return dist.get_rank() if self.is_ddp else 0
 
     def __init__(self, model_name_or_path, **model_kwargs):
         self.model_name_or_path = model_name_or_path
@@ -172,7 +166,6 @@ class SimpleVLMGenerator:
         skip_prompt=False,
         # log_batch_sample=-1,
         show_progress_bar=None,
-        # prepare_prompts=False,  # keeping it here for consistency
         # apply_chat_template=False,
         # add_generation_prompt=False,
         macro_batch_size: int = 512,
@@ -194,6 +187,9 @@ class SimpleVLMGenerator:
         if len(texts) != len(images):
             raise ValueError("Prompt and image counts must be the same.")
 
+        if show_progress_bar is None:
+            show_progress_bar = True if len(texts) > 1 else False
+
         # Prepare model specific processor and generation args
         processor_args = dict()
         if self.vlm_type == VLMType.IDEFICS:
@@ -208,12 +204,16 @@ class SimpleVLMGenerator:
             ).input_ids
             generation_kwargs["bad_words_ids"] = bad_words_ids
 
-        n_macro_batches = math.ceil(len(images) / macro_batch_size)
-        iterator = np.array_split(zip(texts, images), n_macro_batches)
+        batch_starts = range(0, len(texts), macro_batch_size)
         responses = list()
-        for curr_prompts, curr_images in tqdm(
-            iterator, desc="Macro batch", total=n_macro_batches
+        for batch_start_id in tqdm(
+            batch_starts,
+            desc="Macro batch",
+            total=math.ceil(len(texts) / macro_batch_size),
+            disable=(len(texts) <= macro_batch_size),
         ):
+            curr_prompts = texts[batch_start_id : batch_start_id + macro_batch_size]
+            curr_images = images[batch_start_id:macro_batch_size]
 
             if isinstance(curr_images[0], str):
                 curr_images = [PIL.Image.open(i) for i in curr_images]
@@ -238,12 +238,9 @@ class SimpleVLMGenerator:
                     batch_size=batch_size,
                     num_workers=num_workers,
                     collate_fn=collator,
-                    # sampler=DistributedEvalSampler(dataset) if self.is_ddp else None,
+                    sampler=DistributedEvalSampler(dataset) if self.is_ddp else None,
                     pin_memory=True,
                 )
-
-                # if show_progress_bar is None:
-                #     show_progress_bar = True if len(texts) > 1 else False
 
                 outputs = list()
                 for batch_idx, batch in tqdm(
@@ -253,52 +250,15 @@ class SimpleVLMGenerator:
                     disable=not show_progress_bar or self.local_rank != 0,
                 ):
                     batch = batch.to(self.model.device)
-
                     output = self.model.generate(**batch, **generation_kwargs)
-
-                    # if self.vlm_type == VLMType.LLAVA:
-                    #     inputs = self.processor(
-                    #         batch["text"],
-                    #         image,
-                    #         return_tensors="pt",
-                    #         # apply_chat_template=apply_chat_template,
-                    #         # add_generation_prompt=add_generation_prompt,
-                    #     ).to(self.model.device)
-                    #     # current_generation_args = self._prepare_generation_args(**generation_kwargs)
-                    #     output = self.model.generate(**inputs, **generation_kwargs)
-
-                    # elif self.vlm_type == VLMType.IDEFICS:
-                    #     prompt = IdeficsHelper.apply_chat_template(image, text)
-                    #     inputs = self.processor(
-                    #         prompt, add_end_of_utterance_token=False, return_tensors="pt"
-                    #     ).to(self.model.device)
-                    #     exit_condition = self.processor.tokenizer(
-                    #         "<end_of_utterance>", add_special_tokens=False
-                    #     ).input_ids
-                    #     bad_words_ids = self.processor.tokenizer(
-                    #         ["<image>", "<fake_token_around_image>"], add_special_tokens=False
-                    #     ).input_ids
-                    #     output = self.model.generate(
-                    #         **inputs,
-                    #         eos_token_id=exit_condition,
-                    #         bad_words_ids=bad_words_ids,
-                    #         **generation_kwargs,
-                    #     )
-
-                    # elif self.vlm_type == VLMType.BLIP2:
-                    #     inputs = self.processor(image, text, return_tensors="pt").to(
-                    #         self.model.device
-                    #     )
-                    #     output = self.model.generate(**inputs, **generation_kwargs)
-
-                    # else:
-                    #     RuntimeError()
 
                     if skip_prompt:
                         output = output[:, len(batch["input_ids"][0]) :]
 
-                    decoded = self.processor.decode(output[0], skip_special_tokens=True)
-                    outputs.append(decoded)
+                    decoded = self.processor.batch_decode(
+                        output, skip_special_tokens=True
+                    )
+                    outputs.extend(decoded)
 
                 return outputs
 
@@ -315,6 +275,6 @@ class SimpleVLMGenerator:
             else:
                 macro_batch_responses = base_loop(batch_size)
 
-            responses.append(macro_batch_responses)
+            responses.extend(macro_batch_responses)
 
         return responses
