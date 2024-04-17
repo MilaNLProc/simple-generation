@@ -298,7 +298,7 @@ class DefaultGenerationConfig(GenerationConfig):
     num_return_sequences: int = 1
 ```
 
-- We set the tokenizer to use left padding. This is required for batched inference with `AutoModelForCausalLM` but should also be fine with any other `AutoModelForSeq2SeqLM` since we use attention masks.
+- We set the tokenizer to use left padding. This is required for batched inference with `AutoModelForCausalLM` but should also be fine with any other `AutoModelForSeq2SeqLM` since we use attention masks. It is also recommended for VLM batch generations. See [this issue](https://github.com/huggingface/transformers/issues/3021#issuecomment-1454266627) and [usage tips](https://huggingface.co/docs/transformers/model_doc/llava_next#usage-tips) for more details.
 
 ## Warning
 

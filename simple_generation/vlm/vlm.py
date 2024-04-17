@@ -2,6 +2,8 @@ import PIL.Image
 import torch
 import torch.distributed as dist
 
+import torch.utils
+import torch.utils.data
 from transformers import (
     GenerationConfig,
     AutoProcessor,
@@ -10,6 +12,7 @@ from transformers import (
     IdeficsForVisionText2Text,
     Blip2ForConditionalGeneration,
     AutoModelForCausalLM,
+    DataCollatorWithPadding,
 )
 from accelerate import Accelerator
 from accelerate.logging import get_logger
@@ -17,10 +20,13 @@ from accelerate.utils import find_executable_batch_size
 from codecarbon import track_emissions
 import PIL
 import dataclasses
-from typing import List, Union
+from typing import List, Union, Dict
 from tqdm import tqdm
 from enum import Enum
 from .config import IdeficsHelper
+import math
+import numpy as np
+from datasets import Dataset
 
 logger = get_logger(__name__)
 
@@ -34,6 +40,19 @@ class VLMType(Enum):
     IDEFICS = "IDEFICS"
     QWEN = "QWEN"
     BLIP2 = "BLIP2"
+
+
+class VLMDataset(torch.utils.data.Dataset):
+    def __init__(self, processor, prompts: List[str], images) -> None:
+        self.processor = processor
+        self.prompts = prompts
+        self.images = images
+
+    def __len__(self):
+        return len(self.prompts)
+
+    def __getitem__(self, index) -> Dict:
+        pass
 
 
 # @dataclasses.dataclass
@@ -92,6 +111,10 @@ class SimpleVLMGenerator:
 
         self.processor = AutoProcessor.from_pretrained(self.model_name_or_path)
 
+        # padding_size="left" is required for autoregressive models, and should not make a difference for every other model as we use attention_masks. See: https://github.com/huggingface/transformers/issues/3021#issuecomment-1454266627 for a discussion on why left padding is needed on batched inference
+        # This is also relevant for VLM batched generation: https://huggingface.co/docs/transformers/model_doc/llava_next#usage-tips
+        self.processor.tokenizer.padding_side = "left"
+
         # Use accelerator to distribute model if DDP is enabled
         self.accelerator = Accelerator(device_placement=True)
         self.device = self.accelerator.device
@@ -131,7 +154,9 @@ class SimpleVLMGenerator:
             - device: {self.device},
 
             DDP:
-            - distributed inference: {self.is_ddp},
+            - distributed inference: {self.is_ddp}
+
+            **Note** We do not enforce input formatting. Be sure to format you inputs according to the used model. See here examples for LlaVA: https://huggingface.co/docs/transformers/model_doc/llava_next#usage-tips
             """
         )
 
@@ -141,20 +166,20 @@ class SimpleVLMGenerator:
         self,
         texts,
         images,
-        # batch_size="auto",
-        # starting_batch_size=256,
-        # num_workers=4,
+        batch_size="auto",
+        starting_batch_size=256,
+        num_workers=4,
         skip_prompt=False,
         # log_batch_sample=-1,
         show_progress_bar=None,
         # prepare_prompts=False,  # keeping it here for consistency
         # apply_chat_template=False,
         # add_generation_prompt=False,
+        macro_batch_size: int = 512,
         **generation_kwargs,
     ):
         """
-        v1:
-        - no support to batched inference
+        v2:
         - the user needs to take care of the input format
         - support only single-turn inference, text and images at the same position in the input will be considered an input pair.
         """
@@ -169,65 +194,127 @@ class SimpleVLMGenerator:
         if len(texts) != len(images):
             raise ValueError("Prompt and image counts must be the same.")
 
-        if isinstance(images[0], str):
-            logger.info(
-                "Checking the first image we found a string. Trying to load the list from disk... (Note that large image collections might saturate your RAM)"
-            )
-            images = [PIL.Image.open(i) for i in images]
+        # Prepare model specific processor and generation args
+        processor_args = dict()
+        if self.vlm_type == VLMType.IDEFICS:
+            processor_args["add_end_of_utterance_token"] = False
 
-        if show_progress_bar is None:
-            show_progress_bar = True if len(texts) > 1 else False
+            exit_condition = self.processor.tokenizer(
+                "<end_of_utterance>", add_special_tokens=False
+            ).input_ids
+            generation_kwargs["eos_token_id"] = exit_condition
+            bad_words_ids = self.processor.tokenizer(
+                ["<image>", "<fake_token_around_image>"], add_special_tokens=False
+            ).input_ids
+            generation_kwargs["bad_words_ids"] = bad_words_ids
 
-        outputs = list()
-        for text, image in tqdm(
-            zip(texts, images),
-            desc="Item",
-            total=len(texts),
-            disable=not show_progress_bar,
+        n_macro_batches = math.ceil(len(images) / macro_batch_size)
+        iterator = np.array_split(zip(texts, images), n_macro_batches)
+        responses = list()
+        for curr_prompts, curr_images in tqdm(
+            iterator, desc="Macro batch", total=n_macro_batches
         ):
 
-            if self.vlm_type == VLMType.LLAVA:
-                inputs = self.processor(
-                    text,
-                    image,
-                    return_tensors="pt",
-                    # apply_chat_template=apply_chat_template,
-                    # add_generation_prompt=add_generation_prompt,
-                ).to(self.model.device)
-                # current_generation_args = self._prepare_generation_args(**generation_kwargs)
-                output = self.model.generate(**inputs, **generation_kwargs)
+            if isinstance(curr_images[0], str):
+                curr_images = [PIL.Image.open(i) for i in curr_images]
 
-            elif self.vlm_type == VLMType.IDEFICS:
-                prompt = IdeficsHelper.apply_chat_template(image, text)
-                inputs = self.processor(
-                    prompt, add_end_of_utterance_token=False, return_tensors="pt"
-                ).to(self.model.device)
-                exit_condition = self.processor.tokenizer(
-                    "<end_of_utterance>", add_special_tokens=False
-                ).input_ids
-                bad_words_ids = self.processor.tokenizer(
-                    ["<image>", "<fake_token_around_image>"], add_special_tokens=False
-                ).input_ids
-                output = self.model.generate(
-                    **inputs,
-                    eos_token_id=exit_condition,
-                    bad_words_ids=bad_words_ids,
-                    **generation_kwargs,
+            dataset = Dataset.from_dict({"text": curr_prompts, "image": curr_images})
+            dataset = dataset.map(
+                lambda x: self.processor(x["text"], x["image"], **processor_args),
+                batched=True,
+                remove_columns=["text", "image"],
+                desc="Processing macro batch",
+            )
+
+            collator = DataCollatorWithPadding(
+                self.processor.tokenizer, pad_to_multiple_of=8, return_tensors="pt"
+            )
+
+            def base_loop(batch_size):
+                """Base loop for generation."""
+
+                loader = torch.utils.data.DataLoader(
+                    dataset,
+                    batch_size=batch_size,
+                    num_workers=num_workers,
+                    collate_fn=collator,
+                    # sampler=DistributedEvalSampler(dataset) if self.is_ddp else None,
+                    pin_memory=True,
                 )
 
-            elif self.vlm_type == VLMType.BLIP2:
-                inputs = self.processor(image, text, return_tensors="pt").to(
-                    self.model.device
-                )
-                output = self.model.generate(**inputs, **generation_kwargs)
+                # if show_progress_bar is None:
+                #     show_progress_bar = True if len(texts) > 1 else False
 
+                outputs = list()
+                for batch_idx, batch in tqdm(
+                    enumerate(loader),
+                    desc="Generation",
+                    total=len(loader),
+                    disable=not show_progress_bar or self.local_rank != 0,
+                ):
+                    batch = batch.to(self.model.device)
+
+                    output = self.model.generate(**batch, **generation_kwargs)
+
+                    # if self.vlm_type == VLMType.LLAVA:
+                    #     inputs = self.processor(
+                    #         batch["text"],
+                    #         image,
+                    #         return_tensors="pt",
+                    #         # apply_chat_template=apply_chat_template,
+                    #         # add_generation_prompt=add_generation_prompt,
+                    #     ).to(self.model.device)
+                    #     # current_generation_args = self._prepare_generation_args(**generation_kwargs)
+                    #     output = self.model.generate(**inputs, **generation_kwargs)
+
+                    # elif self.vlm_type == VLMType.IDEFICS:
+                    #     prompt = IdeficsHelper.apply_chat_template(image, text)
+                    #     inputs = self.processor(
+                    #         prompt, add_end_of_utterance_token=False, return_tensors="pt"
+                    #     ).to(self.model.device)
+                    #     exit_condition = self.processor.tokenizer(
+                    #         "<end_of_utterance>", add_special_tokens=False
+                    #     ).input_ids
+                    #     bad_words_ids = self.processor.tokenizer(
+                    #         ["<image>", "<fake_token_around_image>"], add_special_tokens=False
+                    #     ).input_ids
+                    #     output = self.model.generate(
+                    #         **inputs,
+                    #         eos_token_id=exit_condition,
+                    #         bad_words_ids=bad_words_ids,
+                    #         **generation_kwargs,
+                    #     )
+
+                    # elif self.vlm_type == VLMType.BLIP2:
+                    #     inputs = self.processor(image, text, return_tensors="pt").to(
+                    #         self.model.device
+                    #     )
+                    #     output = self.model.generate(**inputs, **generation_kwargs)
+
+                    # else:
+                    #     RuntimeError()
+
+                    if skip_prompt:
+                        output = output[:, len(batch["input_ids"][0]) :]
+
+                    decoded = self.processor.decode(output[0], skip_special_tokens=True)
+                    outputs.append(decoded)
+
+                return outputs
+
+            @find_executable_batch_size(starting_batch_size=starting_batch_size)
+            def find_batch_size_loop(batch_size):
+                logger.info(f"Auto finding batch size... Testing bs={batch_size}")
+                return base_loop(batch_size)
+
+            if batch_size == "auto":
+                logger.info(
+                    f"Finding the optimal batch size... Starting with {starting_batch_size}"
+                )
+                macro_batch_responses = find_batch_size_loop()
             else:
-                RuntimeError()
+                macro_batch_responses = base_loop(batch_size)
 
-            if skip_prompt:
-                output = output[:, len(inputs["input_ids"][0]) :]
+            responses.append(macro_batch_responses)
 
-            decoded = self.processor.decode(output[0], skip_special_tokens=True)
-            outputs.append(decoded)
-
-        return outputs
+        return responses
