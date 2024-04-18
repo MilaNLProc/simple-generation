@@ -79,6 +79,10 @@ class SimpleVLMGenerator:
         """Returns the local rank of the process. If not in DDP, returns 0."""
         return dist.get_rank() if self.is_ddp else 0
 
+    @property
+    def tokenizer(self):
+        return self.processor.tokenizer
+
     def __init__(self, model_name_or_path, **model_kwargs):
         self.model_name_or_path = model_name_or_path
 
@@ -117,7 +121,7 @@ class SimpleVLMGenerator:
 
         # padding_size="left" is required for autoregressive models, and should not make a difference for every other model as we use attention_masks. See: https://github.com/huggingface/transformers/issues/3021#issuecomment-1454266627 for a discussion on why left padding is needed on batched inference
         # This is also relevant for VLM batched generation: https://huggingface.co/docs/transformers/model_doc/llava_next#usage-tips
-        self.processor.tokenizer.padding_side = "left"
+        self.tokenizer.padding_side = "left"
 
         try:
             self.generation_config = GenerationConfig.from_pretrained(
