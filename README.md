@@ -38,7 +38,7 @@ pip install simple-generation[vlm]
 
 **Vision-Language Models**
 
-- all of the above for [LLaVA](https://huggingface.co/docs/transformers/main/en/model_doc/llava#overview), [IDEFICS](https://huggingface.co/docs/transformers/main/en/model_doc/idefics#overview), and [BLIP](https://huggingface.co/docs/transformers/main/en/model_doc/blip#overview). Look at 
+- all of the above for [LLaVA](https://huggingface.co/docs/transformers/main/en/model_doc/llava#overview), [IDEFICS](https://huggingface.co/docs/transformers/main/en/model_doc/idefics#overview), and [BLIP](https://huggingface.co/docs/transformers/main/en/model_doc/blip#overview). For an example look into `./examples/vlm`.
 
 **Loading a Model**
 
