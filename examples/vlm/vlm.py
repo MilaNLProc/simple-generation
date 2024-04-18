@@ -21,7 +21,7 @@ def main(model_name_or_path: str = "llava-hf/llava-v1.6-mistral-7b-hf", n: int =
         torch_dtype=torch.bfloat16,
         # device="cuda",
         device_map="auto",
-        # attn_implementation="flash_attention_2",
+        attn_implementation="flash_attention_2",
     )
 
     responses = generator(
