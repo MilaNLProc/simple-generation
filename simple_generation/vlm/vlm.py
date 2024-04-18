@@ -44,28 +44,28 @@ class VLMType(Enum):
     BLIP2 = "BLIP2"
 
 
-# @dataclasses.dataclass
-# class DefaultGenerationConfig(GenerationConfig):
-#     """Default generation configuration.
+@dataclasses.dataclass
+class DefaultGenerationConfig(GenerationConfig):
+    """Default generation configuration.
 
-#     We apply this parameters to any .generate() call, unless they are not overridden.
+    We apply this parameters to any .generate() call, unless they are not overridden.
 
-#     Attributes:
-#         max_new_tokens (int): The maximum number of tokens to generate. Defaults to 512.
-#         do_sample (bool): Whether to use sampling or greedy decoding. Defaults to True.
-#         temperature (float): The sampling temperature. Defaults to 0.7.
-#         top_p (float): The cumulative probability for sampling from the top_p distribution. Defaults to 1.0.
-#         top_k (int): The number of highest probability vocabulary tokens to keep for top-k-filtering. Defaults to 50.
-#         num_return_sequences (int): The number of independently computed returned sequences for each element in the batch. Defaults to 1.
+    Attributes:
+        max_new_tokens (int): The maximum number of tokens to generate. Defaults to 512.
+        do_sample (bool): Whether to use sampling or greedy decoding. Defaults to True.
+        temperature (float): The sampling temperature. Defaults to 0.7.
+        top_p (float): The cumulative probability for sampling from the top_p distribution. Defaults to 1.0.
+        top_k (int): The number of highest probability vocabulary tokens to keep for top-k-filtering. Defaults to 50.
+        num_return_sequences (int): The number of independently computed returned sequences for each element in the batch. Defaults to 1.
 
-#     """
+    """
 
-#     max_new_tokens: int = 512
-#     do_sample: bool = True
-#     temperature: float = 0.7
-#     top_p: float = 1.0
-#     top_k: int = 50
-#     num_return_sequences: int = 1
+    max_new_tokens: int = 512
+    do_sample: bool = True
+    temperature: float = 0.7
+    top_p: float = 1.0
+    top_k: int = 50
+    num_return_sequences: int = 1
 
 
 class SimpleVLMGenerator:
@@ -81,6 +81,16 @@ class SimpleVLMGenerator:
 
     def __init__(self, model_name_or_path, **model_kwargs):
         self.model_name_or_path = model_name_or_path
+
+        # Use accelerator to distribute model if DDP is enabled
+        self.accelerator = Accelerator(device_placement=True)
+        self.device = self.accelerator.device
+        user_request_move_to_device = False
+
+        if "device" in model_kwargs:
+            logger.info(f"Setting device to {self.device} per user's request.")
+            self.device = model_kwargs.pop("device")
+            user_request_move_to_device = True
 
         # Per-Model configuration
         if "llava" in self.model_name_or_path.lower():
@@ -109,23 +119,13 @@ class SimpleVLMGenerator:
         # This is also relevant for VLM batched generation: https://huggingface.co/docs/transformers/model_doc/llava_next#usage-tips
         self.processor.tokenizer.padding_side = "left"
 
-        # Use accelerator to distribute model if DDP is enabled
-        self.accelerator = Accelerator(device_placement=True)
-        self.device = self.accelerator.device
-        user_request_move_to_device = False
-
-        if "device" in model_kwargs:
-            logger.info(f"Setting device to {self.device} per user's request.")
-            self.device = model_kwargs.pop("device")
-            user_request_move_to_device = True
-
-        # try:
-        #     self.generation_config = GenerationConfig.from_pretrained(
-        #         model_name_or_path
-        #     )
-        # except Exception as e:
-        #     logger.warning("Could not load generation config. Using default one.")
-        #     self.generation_config = DefaultGenerationConfig()
+        try:
+            self.generation_config = GenerationConfig.from_pretrained(
+                model_name_or_path
+            )
+        except Exception as e:
+            logger.warning("Could not load generation config. Using default one.")
+            self.generation_config = DefaultGenerationConfig()
 
         self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
 
@@ -154,6 +154,38 @@ class SimpleVLMGenerator:
             """
         )
 
+    def _prepare_generation_args(self, **generation_kwargs):
+        current_generation_args = self.generation_config.to_dict()
+
+        logger.info("Setting pad_token_id to eos_token_id for open-end generation")
+        current_generation_args["pad_token_id"] = self.tokenizer.eos_token_id
+        current_generation_args["eos_token_id"] = self.tokenizer.eos_token_id
+
+        # We fix when some model default to the outdated "max_length" parameter
+        if "max_length" in current_generation_args:
+            logger.info(
+                "Found 'max_length' in the model's default generation config. Setting this value to 'max_new_tokens' instead."
+            )
+            current_generation_args["max_new_tokens"] = current_generation_args.pop(
+                "max_length"
+            )
+
+        if len(generation_kwargs) > 0:
+            logger.info(
+                "Custom generation args passed. Any named parameters will override the same default one."
+            )
+            current_generation_args.update(generation_kwargs)
+
+        # Postprocess generation kwargs
+        if (
+            "temperature" in current_generation_args
+            and current_generation_args["temperature"] == 0
+        ):
+            logger.info("Temperature cannot be 0. Setting it to 1e-4.")
+            current_generation_args["temperature"] = 1e-4
+
+        return current_generation_args
+
     @track_emissions(log_level="error", measure_power_secs=60)
     @inference_decorator()
     def __call__(
@@ -164,17 +196,13 @@ class SimpleVLMGenerator:
         starting_batch_size=256,
         num_workers=4,
         skip_prompt=False,
-        # log_batch_sample=-1,
+        log_batch_sample=-1,
         show_progress_bar=None,
-        # apply_chat_template=False,
-        # add_generation_prompt=False,
         macro_batch_size: int = 512,
         **generation_kwargs,
     ):
         """
-        v2:
-        - the user needs to take care of the input format
-        - support only single-turn inference, text and images at the same position in the input will be considered an input pair.
+        TBD.
         """
 
         if not isinstance(texts, list):
@@ -189,6 +217,9 @@ class SimpleVLMGenerator:
 
         if show_progress_bar is None:
             show_progress_bar = True if len(texts) > 1 else False
+
+        current_generation_args = self._prepare_generation_args(**generation_kwargs)
+        logger.debug("Generation args:", current_generation_args)
 
         # Prepare model specific processor and generation args
         processor_args = dict()
@@ -250,17 +281,53 @@ class SimpleVLMGenerator:
                     disable=not show_progress_bar or self.local_rank != 0,
                 ):
                     batch = batch.to(self.model.device)
-                    output = self.model.generate(**batch, **generation_kwargs)
+                    try:
+                        output = self.model.generate(**batch, **current_generation_args)
 
-                    if skip_prompt:
-                        output = output[:, len(batch["input_ids"][0]) :]
+                        if skip_prompt:
+                            output = output[:, len(batch["input_ids"][0]) :]
 
-                    decoded = self.processor.batch_decode(
-                        output, skip_special_tokens=True
-                    )
+                        decoded = self.processor.batch_decode(
+                            output, skip_special_tokens=True
+                        )
+                    except Exception as e:
+                        if isinstance(e, torch.cuda.OutOfMemoryError):
+                            raise e
+
+                        logger.error(f"Error {e}")
+                        logger.error("Generation failed. Skipping batch.")
+                        decoded = ["ERROR: Generation failed"] * len(batch["input_ids"])
+
                     outputs.extend(decoded)
 
-                return outputs
+                    if log_batch_sample != -1 and (
+                        log_batch_sample % (batch_idx + 1) == 0
+                    ):
+                        logger.info(
+                            f"Log decoded text at batch_id {batch_idx}", decoded[0]
+                        )
+
+                if self.is_ddp:
+                    target_list = [None for _ in range(dist.get_world_size())]
+
+                    dist.gather_object(
+                        outputs, target_list if dist.get_rank() == 0 else None, dst=0
+                    )
+
+                    if self.is_main_process:
+                        responses = [
+                            item for sublist in target_list for item in sublist
+                        ]
+                    else:
+                        logger.debug(
+                            f"Killing non-main process with rank {dist.get_rank()} as no longer needed."
+                        )
+                        exit(0)
+
+                else:
+                    responses = outputs
+
+                return responses
 
             @find_executable_batch_size(starting_batch_size=starting_batch_size)
             def find_batch_size_loop(batch_size):
