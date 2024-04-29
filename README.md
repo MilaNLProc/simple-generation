@@ -6,10 +6,10 @@
 
 # Simple Generation
 
-Simple Generation offers a minimal interface to run text generation with HuggingFace checkpoint.
-The core idea is to ship many neat features out of the box and avoid boilerplate.
+Simple Generation offers a minimal interface to run text generation with HuggingFace checkpoints.
+The core idea is to ship many neat features out of the box, avoiding boilerplate.
 
-This is mainly for personal use and simple hardware setups (ideally, single-node single- or multi-gpu).
+*Simplegen is mainly for personal use and simple hardware setups (ideally, single-node single- or multi-gpu). If you are looking for production-ready inference engine consider looking elsewhere :) )*
 
 Moreover, please note that **the library will apply some (sensible) defaults (on where to place models, generation configuration, and so on) which might not suit your use case** and should be edited accordingly. Please head to [defaults](#defaults) to see a list of things you should be aware of.
 
@@ -18,9 +18,9 @@ Install:
 pip install simple-generation
 ```
 
-Or, install it from source with:
+If you want to use inference with Vision Language Models (VLMs) run:
 ```bash
-pip install git+https://github.com/MilaNLProc/simple-generation.git
+pip install simple-generation[vlm]
 ```
 
 ## Features
@@ -35,6 +35,10 @@ pip install git+https://github.com/MilaNLProc/simple-generation.git
 - sparsity and fused kernels for speed with [optimum](https://huggingface.co/docs/optimum/main/en/index) (`use_bettertransformer=True`)
 - DDP for single-node, multi-gpu setups using [accelerate](https://github.com/huggingface/accelerate). See [Distributed Inference](#distributed-inference)
 - GUI for quick interaction with models using Gradio's [ChatInterface](https://www.gradio.app/guides/creating-a-chatbot-fast#customizing-your-chatbot). See [Chat Interface](#chat-interface)
+
+**Vision-Language Models**
+
+- all of the above for [LLaVA](https://huggingface.co/docs/transformers/main/en/model_doc/llava#overview), [IDEFICS](https://huggingface.co/docs/transformers/main/en/model_doc/idefics#overview), and [BLIP](https://huggingface.co/docs/transformers/main/en/model_doc/blip#overview). For an example look into `./examples/vlm`.
 
 **Loading a Model**
 
@@ -275,7 +279,6 @@ CUDA_VISIBLE_DEVICES=0,1 accelerate launch --num_processes 2 examples/inference.
 >> 105s
 ```
 
-
 ## Defaults
 
 If not specified we set some sensible defaults. **Please note that they might not fit your use case.**
@@ -298,7 +301,7 @@ class DefaultGenerationConfig(GenerationConfig):
     num_return_sequences: int = 1
 ```
 
-- We set the tokenizer to use left padding. This is required for batched inference with `AutoModelForCausalLM` but should also be fine with any other `AutoModelForSeq2SeqLM` since we use attention masks.
+- We set the tokenizer to use left padding. This is required for batched inference with `AutoModelForCausalLM` but should also be fine with any other `AutoModelForSeq2SeqLM` since we use attention masks. It is also recommended for VLM batch generations. See [this issue](https://github.com/huggingface/transformers/issues/3021#issuecomment-1454266627) and [usage tips](https://huggingface.co/docs/transformers/model_doc/llava_next#usage-tips) for more details.
 
 ## Warning
 
