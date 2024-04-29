@@ -20,7 +20,7 @@ pip install simple-generation
 
 If you want to use inference with Vision Language Models (VLMs) run:
 ```bash
-pip install simple-generation[vlm]
+pip install "simple-generation[vlm]"
 ```
 
 ## Features
