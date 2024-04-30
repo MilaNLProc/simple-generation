@@ -38,7 +38,12 @@ pip install "simple-generation[vlm]"
 
 **Vision-Language Models**
 
-- all of the above for [LLaVA](https://huggingface.co/docs/transformers/main/en/model_doc/llava#overview), [IDEFICS](https://huggingface.co/docs/transformers/main/en/model_doc/idefics#overview), and [BLIP](https://huggingface.co/docs/transformers/main/en/model_doc/blip#overview). For an example look into `./examples/vlm`.
+- all of the above for [LLaVA](https://huggingface.co/docs/transformers/main/en/model_doc/llava#overview),
+[IDEFICS](https://huggingface.co/docs/transformers/main/en/model_doc/idefics#overview), 
+[IDEFICS2](https://huggingface.co/docs/transformers/v4.40.1/en/model_doc/idefics2),
+and [BLIP](https://huggingface.co/docs/transformers/main/en/model_doc/blip#overview).
+
+For an example look into `./examples/vlm`.
 
 **Loading a Model**
 
@@ -174,6 +179,34 @@ output = generator(
 )
 ```
 
+### Distributed Inference
+
+Simple Generation supports DDP to run distributed inference in Single-Node, Multi-GPUs setups. Note that a copy of the model will be instantiated in each GPU (instead of smart weights placements across multiple GPUs with `device_map="auto"`), so **each of your GPU will need to have enough space to fit a copy of the model**.
+
+The only change you'll need to take is launching your script with `accelerate`. E.g.,:
+
+```bash
+accelerate launch --num_processes 2 examples/inference.py # uses 2 GPUs
+```
+
+Note: if you do not specify `--num_processes` all local GPUs will be used.
+
+Some timing tests on 2xA5000 with Llama-2-7b-chat and 384 input prompts:
+
+```shell
+# single GPU
+CUDA_VISIBLE_DEVICES=0 python examples/inference.py
+>> 217s
+
+# two GPUs, smart placement
+CUDA_VISIBLE_DEVICES=0,1 python examples/inference.py
+>> 219s
+
+# two GPUs, DDP
+CUDA_VISIBLE_DEVICES=0,1 accelerate launch --num_processes 2 examples/inference.py
+>> 105s
+```
+
 ### Multiple-Request Conversation
 
 The library supports creating a conversation by prompting models with multiple requests. I.e., it is possible to build a multi-turn conversation with fixed user requests. You can use the `conversation_from_user_prompts()` method, that accepts the same arguments of `__call__`.
@@ -249,34 +282,6 @@ Instructions:
 8. Remove the cake from the oven and let it cool in the pan for 10 minutes. Then, remove the cake from the pan and let it cool completely on a wire rack.
 
 This is a basic recipe for a cake, and there are many variations and modifications that can be made to suit your preferences and the occasion for which you are making the cake. For example, you can add flavorings such as vanilla extract or chocolate chips, or use a different type of flour or sugar if you have a specific dietary need or preference.</s></s>
-```
-
-### Distributed Inference
-
-Simple Generation supports DDP to run distributed inference in Single-Node, Multi-GPUs setups. Note that a copy of the model will be instantiated in each GPU (instead of smart weights placements across multiple GPUs with `device_map="auto"`), so **each of your GPU will need to have enough space to fit a copy of the model**.
-
-The only change you'll need to take is launching your script with `accelerate`. E.g.,:
-
-```bash
-accelerate launch --num_processes 2 examples/inference.py # uses 2 GPUs
-```
-
-Note: if you do not specify `--num_processes` all local GPUs will be used.
-
-Some timing tests on 2xA5000 with Llama-2-7b-chat and 384 input prompts:
-
-```shell
-# single GPU
-CUDA_VISIBLE_DEVICES=0 python examples/inference.py
->> 217s
-
-# two GPUs, smart placement
-CUDA_VISIBLE_DEVICES=0,1 python examples/inference.py
->> 219s
-
-# two GPUs, DDP
-CUDA_VISIBLE_DEVICES=0,1 accelerate launch --num_processes 2 examples/inference.py
->> 105s
 ```
 
 ## Defaults
