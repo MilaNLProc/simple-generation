@@ -140,7 +140,7 @@ class SimpleVLMGenerator:
             Simple Generation (VLM) initialization completed!
 
             Model:
-            - id: {self.model_name_or_path},
+            - model_id: {self.model_name_or_path},
             - VLM type: {self.vlm_type}
 
             Model placement:
@@ -249,8 +249,8 @@ class SimpleVLMGenerator:
             total=math.ceil(len(texts) / macro_batch_size),
             disable=(len(texts) <= macro_batch_size),
         ):
-            curr_prompts = texts[batch_start_id : batch_start_id + macro_batch_size]
-            curr_images = images[batch_start_id:macro_batch_size]
+            curr_prompts = texts[batch_start_id: batch_start_id + macro_batch_size]
+            curr_images = images[batch_start_id: batch_start_id + macro_batch_size]
 
             if isinstance(curr_images[0], str):
                 curr_images = [PIL.Image.open(i) for i in curr_images]
@@ -338,8 +338,6 @@ class SimpleVLMGenerator:
                 macro_batch_responses = find_batch_size_loop()
             else:
                 macro_batch_responses = base_loop(batch_size)
-
-            # macro_batch_responses = base_loop(batch_size=1)
 
             responses.extend(macro_batch_responses)
 
