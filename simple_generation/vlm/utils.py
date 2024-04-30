@@ -53,6 +53,9 @@ class VLMCollator:
                 text=prompts, images=[[i] for i in images], **self.processor_args
             )
 
+        elif self.vlm_type == VLMType.BLIP2:
+            batch = self.processor(images, prompts, **self.processor_args)
+
         else:
             raise RuntimeError("VLMType not supported")
 
