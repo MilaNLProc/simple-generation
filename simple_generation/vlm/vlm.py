@@ -1,18 +1,15 @@
 import PIL.Image
 import torch
 import torch.distributed as dist
+import pdb
 
 import torch.utils
 import torch.utils.data
 from transformers import (
     GenerationConfig,
     AutoProcessor,
-    AutoTokenizer,
-    LlavaNextForConditionalGeneration,
     IdeficsForVisionText2Text,
-    Blip2ForConditionalGeneration,
-    AutoModelForCausalLM,
-    DataCollatorWithPadding,
+    AutoModelForVision2Seq,
 )
 from accelerate import Accelerator
 from accelerate.logging import get_logger
@@ -40,7 +37,6 @@ inference_decorator = (
 class VLMType(Enum):
     LLAVA = "LLAVA"
     IDEFICS = "IDEFICS"
-    QWEN = "QWEN"
     BLIP2 = "BLIP2"
 
 
@@ -98,7 +94,7 @@ class SimpleVLMGenerator:
 
         # Per-Model configuration
         if "llava" in self.model_name_or_path.lower():
-            model_cls = LlavaNextForConditionalGeneration
+            model_cls = AutoModelForVision2Seq
             self.vlm_type = VLMType.LLAVA
             # self.processor = AutoProcessor.from_pretrained(self.model_name_or_path)
         elif "idefics" in self.model_name_or_path.lower():
@@ -106,14 +102,9 @@ class SimpleVLMGenerator:
             self.vlm_type = VLMType.IDEFICS
             # self.processor = AutoProcessor.from_pretrained(self.model_name_or_path)
         elif "blip" in self.model_name_or_path.lower():
-            model_cls = Blip2ForConditionalGeneration
+            model_cls = AutoModelForVision2Seq
             self.vlm_type = VLMType.BLIP2
             # self.processor = AutoProcessor.from_pretrained(self.model_name_or_path)
-        elif "qwen" in self.model_name_or_path.lower():
-            raise NotImplementedError()
-            model_cls = AutoModelForCausalLM
-            self.vlm_type = VLMType.QWEN
-            self.processor = AutoTokenizer.from_pretrained(self.model_name_or_path)
         else:
             raise NotImplementedError(f"We do not wrap {model_name_or_path} yet!")
 
@@ -121,7 +112,13 @@ class SimpleVLMGenerator:
 
         # padding_size="left" is required for autoregressive models, and should not make a difference for every other model as we use attention_masks. See: https://github.com/huggingface/transformers/issues/3021#issuecomment-1454266627 for a discussion on why left padding is needed on batched inference
         # This is also relevant for VLM batched generation: https://huggingface.co/docs/transformers/model_doc/llava_next#usage-tips
-        self.tokenizer.padding_side = "left"
+
+        if not hasattr(self.tokenizer, "padding_size"):
+            logger.info("Setting tokenizer.padding_size to 'left'")
+            self.tokenizer.padding_side = "left"
+        if not hasattr(self.tokenizer, "pad_token"):
+            logger.info("Setting tokenizer.pad_token to 'pad'")
+            self.tokenizer.pad_token = "<pad>"
 
         try:
             self.generation_config = GenerationConfig.from_pretrained(
@@ -198,16 +195,13 @@ class SimpleVLMGenerator:
         images,
         batch_size="auto",
         starting_batch_size=256,
-        num_workers=4,
+        num_workers=0,
         skip_prompt=False,
         log_batch_sample=-1,
         show_progress_bar=None,
         macro_batch_size: int = 512,
         **generation_kwargs,
     ):
-        """
-        TBD.
-        """
 
         if not isinstance(texts, list):
             logger.debug("Texts is not a list. Wrapping it in a list.")
@@ -230,7 +224,7 @@ class SimpleVLMGenerator:
         if self.vlm_type == VLMType.IDEFICS:
             processor_args["add_end_of_utterance_token"] = False
 
-            exit_condition = self.processor.tokenizer(
+            exit_condition = self.tokenizer(
                 "<end_of_utterance>", add_special_tokens=False
             ).input_ids
             generation_kwargs["eos_token_id"] = exit_condition
@@ -238,6 +232,17 @@ class SimpleVLMGenerator:
                 ["<image>", "<fake_token_around_image>"], add_special_tokens=False
             ).input_ids
             generation_kwargs["bad_words_ids"] = bad_words_ids
+
+        # if self.vlm_type == VLMType.LLAVA:
+
+        # pad truncate and batch on the fly (see set_transform())
+        processor_args["truncation"] = True
+        processor_args["return_tensors"] = "pt"
+        if batch_size == "auto" or batch_size > 1:
+            logger.info(
+                f"Found batch size {batch_size}: setting tokenizer.padding to 'longest'"
+            )
+            processor_args["padding"] = "longest"
 
         batch_starts = range(0, len(texts), macro_batch_size)
         responses = list()
@@ -254,16 +259,29 @@ class SimpleVLMGenerator:
                 curr_images = [PIL.Image.open(i) for i in curr_images]
 
             dataset = Dataset.from_dict({"text": curr_prompts, "image": curr_images})
-            dataset = dataset.map(
-                lambda x: self.processor(x["text"], x["image"], **processor_args),
-                batched=True,
-                remove_columns=["text", "image"],
-                desc="Processing macro batch",
-            )
 
-            collator = DataCollatorWithPadding(
-                self.processor.tokenizer, pad_to_multiple_of=8, return_tensors="pt"
-            )
+            def _collate_with_processor(batch):
+                texts = [x["text"] for x in batch]
+                images = [x["image"] for x in batch]
+
+                if self.vlm_type == VLMType.LLAVA:
+                    batch = self.processor(texts, images, **processor_args)
+
+                elif self.vlm_type == VLMType.IDEFICS:
+                    inputs = [[t, i] for t, i in zip(texts, images)]
+                    batch = self.processor(inputs, **processor_args)
+
+                return batch
+
+            # dataset = dataset.map(
+            #     lambda x: self.processor(x["text"], x["image"], **processor_args),
+            #     remove_columns=["text", "image"],
+            # )
+            # dataset.set_format("torch")
+
+            # collator = DataCollatorWithPadding(
+            #     self.processor.tokenizer, pad_to_multiple_of=8, return_tensors="pt"
+            # )
 
             def base_loop(batch_size):
                 """Base loop for generation."""
@@ -272,7 +290,7 @@ class SimpleVLMGenerator:
                     dataset,
                     batch_size=batch_size,
                     num_workers=num_workers,
-                    collate_fn=collator,
+                    collate_fn=_collate_with_processor,
                     sampler=DistributedEvalSampler(dataset) if self.is_ddp else None,
                     pin_memory=True,
                 )
@@ -284,6 +302,9 @@ class SimpleVLMGenerator:
                     total=len(loader),
                     disable=not show_progress_bar or self.local_rank != 0,
                 ):
+                    # batch = {
+                    #     k: v.to(self.model.device).squeeze(0) for k, v in batch.items()
+                    # }
                     batch = batch.to(self.model.device)
                     try:
                         output = self.model.generate(**batch, **current_generation_args)
@@ -345,6 +366,8 @@ class SimpleVLMGenerator:
                 macro_batch_responses = find_batch_size_loop()
             else:
                 macro_batch_responses = base_loop(batch_size)
+
+            # macro_batch_responses = base_loop(batch_size=1)
 
             responses.extend(macro_batch_responses)
 

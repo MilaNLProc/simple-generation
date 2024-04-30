@@ -32,7 +32,7 @@ def main(model_name_or_path: str = "llava-hf/llava-v1.6-mistral-7b-hf", n: int =
         top_p=0.9,
         do_sample=True,
         skip_prompt=True,
-        batch_size=8,
+        batch_size=1,
         num_workers=2,
     )
 
