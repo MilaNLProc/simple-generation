@@ -14,12 +14,11 @@ def main(model_name_or_path: str = "llava-hf/llava-v1.6-mistral-7b-hf", n: int =
     image = Image.open(requests.get(url, stream=True).raw)
 
     images = [copy.deepcopy(image) for _ in range(n)]
-    prompts = ["[INST] <image>\nWhat's in this image? [/INST]"] * len(images)
+    prompts = ["What's in this image?"] * len(images)
 
     generator = SimpleVLMGenerator(
         model_name_or_path,
         torch_dtype=torch.bfloat16,
-        # device="cuda",
         device_map="auto",
         attn_implementation="flash_attention_2",
     )
