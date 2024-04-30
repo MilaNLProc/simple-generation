@@ -10,6 +10,7 @@ from transformers import (
     AutoProcessor,
     IdeficsForVisionText2Text,
     AutoModelForVision2Seq,
+    AutoConfig,
 )
 from accelerate import Accelerator
 from accelerate.logging import get_logger
@@ -19,8 +20,7 @@ import PIL
 import dataclasses
 from typing import List, Union, Dict
 from tqdm import tqdm
-from enum import Enum
-from .config import IdeficsHelper
+from .utils import VLMCollator, VLMType
 import math
 import numpy as np
 from datasets import Dataset
@@ -32,12 +32,6 @@ logger = get_logger(__name__)
 inference_decorator = (
     torch.inference_mode if torch.__version__ >= "2.0.0" else torch.no_grad
 )
-
-
-class VLMType(Enum):
-    LLAVA = "LLAVA"
-    IDEFICS = "IDEFICS"
-    BLIP2 = "BLIP2"
 
 
 @dataclasses.dataclass
@@ -92,27 +86,10 @@ class SimpleVLMGenerator:
             self.device = model_kwargs.pop("device")
             user_request_move_to_device = True
 
-        # Per-Model configuration
-        if "llava" in self.model_name_or_path.lower():
-            model_cls = AutoModelForVision2Seq
-            self.vlm_type = VLMType.LLAVA
-            # self.processor = AutoProcessor.from_pretrained(self.model_name_or_path)
-        elif "idefics" in self.model_name_or_path.lower():
-            model_cls = IdeficsForVisionText2Text
-            self.vlm_type = VLMType.IDEFICS
-            # self.processor = AutoProcessor.from_pretrained(self.model_name_or_path)
-        elif "blip" in self.model_name_or_path.lower():
-            model_cls = AutoModelForVision2Seq
-            self.vlm_type = VLMType.BLIP2
-            # self.processor = AutoProcessor.from_pretrained(self.model_name_or_path)
-        else:
-            raise NotImplementedError(f"We do not wrap {model_name_or_path} yet!")
-
         self.processor = AutoProcessor.from_pretrained(self.model_name_or_path)
 
         # padding_size="left" is required for autoregressive models, and should not make a difference for every other model as we use attention_masks. See: https://github.com/huggingface/transformers/issues/3021#issuecomment-1454266627 for a discussion on why left padding is needed on batched inference
         # This is also relevant for VLM batched generation: https://huggingface.co/docs/transformers/model_doc/llava_next#usage-tips
-
         if not hasattr(self.tokenizer, "padding_size"):
             logger.info("Setting tokenizer.padding_size to 'left'")
             self.tokenizer.padding_side = "left"
@@ -128,6 +105,28 @@ class SimpleVLMGenerator:
             logger.warning("Could not load generation config. Using default one.")
             self.generation_config = DefaultGenerationConfig()
 
+        self.config = AutoConfig.from_pretrained(model_name_or_path)
+        if self.config.architectures[0] == "LlavaForConditionalGeneration":
+            self.vlm_type = VLMType.LLAVA
+        elif self.config.architectures[0] == "IdeficsForVisionText2Text":
+            self.vlm_type = VLMType.IDEFICS
+        elif self.config.architectures[0] == "Idefics2ForConditionalGeneration":
+            self.vlm_type = VLMType.IDEFICS2
+        elif self.config.architectures[0] == "Blip2ForConditionalGeneration":
+            self.vlm_type = VLMType.BLIP2
+        else:
+            logger.error(
+                f"Model architecture for {model_name_or_path} is not yet supported"
+            )
+            raise ValueError(
+                f"Model architecture for {model_name_or_path} is not yet supported"
+            )
+
+        model_cls = (
+            IdeficsForVisionText2Text
+            if self.vlm_type == VLMType.IDEFICS
+            else AutoModelForVision2Seq
+        )
         self.model = model_cls.from_pretrained(model_name_or_path, **model_kwargs)
 
         if self.is_ddp or user_request_move_to_device:
@@ -150,8 +149,6 @@ class SimpleVLMGenerator:
 
             DDP:
             - distributed inference: {self.is_ddp}
-
-            **Note** We do not enforce input formatting. Be sure to format you inputs according to the used model. See here examples for LlaVA: https://huggingface.co/docs/transformers/model_doc/llava_next#usage-tips
             """
         )
 
@@ -259,29 +256,7 @@ class SimpleVLMGenerator:
                 curr_images = [PIL.Image.open(i) for i in curr_images]
 
             dataset = Dataset.from_dict({"text": curr_prompts, "image": curr_images})
-
-            def _collate_with_processor(batch):
-                texts = [x["text"] for x in batch]
-                images = [x["image"] for x in batch]
-
-                if self.vlm_type == VLMType.LLAVA:
-                    batch = self.processor(texts, images, **processor_args)
-
-                elif self.vlm_type == VLMType.IDEFICS:
-                    inputs = [[t, i] for t, i in zip(texts, images)]
-                    batch = self.processor(inputs, **processor_args)
-
-                return batch
-
-            # dataset = dataset.map(
-            #     lambda x: self.processor(x["text"], x["image"], **processor_args),
-            #     remove_columns=["text", "image"],
-            # )
-            # dataset.set_format("torch")
-
-            # collator = DataCollatorWithPadding(
-            #     self.processor.tokenizer, pad_to_multiple_of=8, return_tensors="pt"
-            # )
+            collator = VLMCollator(self.vlm_type, self.processor, processor_args)
 
             def base_loop(batch_size):
                 """Base loop for generation."""
@@ -290,7 +265,7 @@ class SimpleVLMGenerator:
                     dataset,
                     batch_size=batch_size,
                     num_workers=num_workers,
-                    collate_fn=_collate_with_processor,
+                    collate_fn=collator,
                     sampler=DistributedEvalSampler(dataset) if self.is_ddp else None,
                     pin_memory=True,
                 )
@@ -302,9 +277,6 @@ class SimpleVLMGenerator:
                     total=len(loader),
                     disable=not show_progress_bar or self.local_rank != 0,
                 ):
-                    # batch = {
-                    #     k: v.to(self.model.device).squeeze(0) for k, v in batch.items()
-                    # }
                     batch = batch.to(self.model.device)
                     try:
                         output = self.model.generate(**batch, **current_generation_args)
