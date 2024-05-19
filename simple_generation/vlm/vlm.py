@@ -108,6 +108,8 @@ class SimpleVLMGenerator:
         self.config = AutoConfig.from_pretrained(model_name_or_path)
         if self.config.architectures[0] == "LlavaForConditionalGeneration":
             self.vlm_type = VLMType.LLAVA
+        if self.config.architectures[0] == "LlavaNextForConditionalGeneration":
+            self.vlm_type = VLMType.LLAVA_NEXT
         elif self.config.architectures[0] == "IdeficsForVisionText2Text":
             self.vlm_type = VLMType.IDEFICS
         elif self.config.architectures[0] == "Idefics2ForConditionalGeneration":

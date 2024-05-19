@@ -7,6 +7,7 @@ import pdb
 
 class VLMType(Enum):
     LLAVA = "LLAVA"
+    LLAVA_NEXT = "LLAVA_NEXT"
     IDEFICS = "IDEFICS"
     IDEFICS2 = "IDEFICS2"
     BLIP2 = "BLIP2"
@@ -24,6 +25,10 @@ class VLMCollator:
 
         if self.vlm_type == VLMType.LLAVA:
             prompts = [f"USER: <image>\n{p}\nASSISTANT:" for p in prompts]
+            batch = self.processor(prompts, images, **self.processor_args)
+        
+        elif self.vlm_type == VLMType.LLAVA_NEXT:
+            prompts = [f"[INST] <image>\n{p} [/INST]" for p in prompts]
             batch = self.processor(prompts, images, **self.processor_args)
 
         elif self.vlm_type == VLMType.IDEFICS:
