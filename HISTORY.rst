@@ -2,6 +2,11 @@
 History
 =======
 
+0.4.3 (2024-05-20)
+------------------
+
+* Adds support to LlavaNextForConditionalGeneration models.
+
 0.4.0 (2024-04-29)
 ------------------
 

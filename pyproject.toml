@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "simple-generation"
-version = "0.4.2"
+version = "0.4.3"
 description = "A python package to run inference with HuggingFace checkpoints wrapping many convenient features."
 authors = ["Giuseppe Attanasio <giuseppeattanasio6@gmail.com>"]
 license = "Apache Software License 2.0"
