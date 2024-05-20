@@ -108,7 +108,7 @@ class SimpleVLMGenerator:
         self.config = AutoConfig.from_pretrained(model_name_or_path)
         if self.config.architectures[0] == "LlavaForConditionalGeneration":
             self.vlm_type = VLMType.LLAVA
-        if self.config.architectures[0] == "LlavaNextForConditionalGeneration":
+        elif self.config.architectures[0] == "LlavaNextForConditionalGeneration":
             self.vlm_type = VLMType.LLAVA_NEXT
         elif self.config.architectures[0] == "IdeficsForVisionText2Text":
             self.vlm_type = VLMType.IDEFICS
@@ -251,8 +251,8 @@ class SimpleVLMGenerator:
             total=math.ceil(len(texts) / macro_batch_size),
             disable=(len(texts) <= macro_batch_size),
         ):
-            curr_prompts = texts[batch_start_id: batch_start_id + macro_batch_size]
-            curr_images = images[batch_start_id: batch_start_id + macro_batch_size]
+            curr_prompts = texts[batch_start_id : batch_start_id + macro_batch_size]
+            curr_images = images[batch_start_id : batch_start_id + macro_batch_size]
 
             if isinstance(curr_images[0], str):
                 curr_images = [PIL.Image.open(i) for i in curr_images]
