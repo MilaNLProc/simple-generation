@@ -191,7 +191,7 @@ class SimpleVLMGenerator:
     def __call__(
         self,
         texts,
-        images,
+        images: List = None,
         batch_size="auto",
         starting_batch_size=256,
         num_workers=0,
@@ -201,16 +201,16 @@ class SimpleVLMGenerator:
         macro_batch_size: int = 512,
         **generation_kwargs,
     ):
-
         if not isinstance(texts, list):
             logger.debug("Texts is not a list. Wrapping it in a list.")
             texts = [texts]
-        if not isinstance(images, list):
+
+        if images and isinstance(images, list):
             logger.debug("Images is not a list. Wrapping it in a list.")
             images = [images]
 
-        if len(texts) != len(images):
-            raise ValueError("Prompt and image counts must be the same.")
+            if len(texts) != len(images):
+                raise ValueError("Prompt and image counts must be the same.")
 
         if show_progress_bar is None:
             show_progress_bar = True if len(texts) > 1 else False
@@ -232,9 +232,7 @@ class SimpleVLMGenerator:
             ).input_ids
             generation_kwargs["bad_words_ids"] = bad_words_ids
 
-        # if self.vlm_type == VLMType.LLAVA:
-
-        # pad truncate and batch on the fly (see set_transform())
+        # pad truncate and batch on the fly
         processor_args["truncation"] = True
         processor_args["return_tensors"] = "pt"
         if batch_size == "auto" or batch_size > 1:
@@ -252,12 +250,18 @@ class SimpleVLMGenerator:
             disable=(len(texts) <= macro_batch_size),
         ):
             curr_prompts = texts[batch_start_id : batch_start_id + macro_batch_size]
-            curr_images = images[batch_start_id : batch_start_id + macro_batch_size]
+            data_items = {"text": curr_prompts}
 
-            if isinstance(curr_images[0], str):
-                curr_images = [PIL.Image.open(i) for i in curr_images]
+            # Prepare images if available
+            if images:
+                curr_images = images[batch_start_id : batch_start_id + macro_batch_size]
+                # If images is a list of strings, we assume their are local paths
+                if isinstance(curr_images[0], str):
+                    curr_images = [PIL.Image.open(i) for i in curr_images]
 
-            dataset = Dataset.from_dict({"text": curr_prompts, "image": curr_images})
+                data_items["image"] = curr_images
+
+            dataset = Dataset.from_dict(data_items)
             collator = VLMCollator(self.vlm_type, self.processor, processor_args)
 
             def base_loop(batch_size):
