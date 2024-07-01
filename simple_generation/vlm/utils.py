@@ -24,13 +24,13 @@ class VLMCollator:
         images = [x["image"] for x in batch] if "image" in batch else None
 
         if self.vlm_type == VLMType.LLAVA:
-
             if images:
                 prompts = [f"USER: <image>\n{p}\nASSISTANT:" for p in prompts]
                 batch = self.processor(prompts, images, **self.processor_args)
             else:
                 prompts = [f"USER: {p}\nASSISTANT:" for p in prompts]
-                batch = self.processor(prompts, **self.processor_args)
+                batch = self.processor(text=prompts, **self.processor_args)
+                batch.pop("pixel_values")
 
         elif self.vlm_type == VLMType.LLAVA_NEXT:
 
