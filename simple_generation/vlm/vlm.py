@@ -205,7 +205,7 @@ class SimpleVLMGenerator:
             logger.debug("Texts is not a list. Wrapping it in a list.")
             texts = [texts]
 
-        if images and isinstance(images, list):
+        if images is not None and not isinstance(images, list):
             logger.debug("Images is not a list. Wrapping it in a list.")
             images = [images]
 
