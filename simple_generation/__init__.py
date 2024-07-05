@@ -6,3 +6,4 @@ __version__ = "0.4.5"
 
 
 from .simple_generation import SimpleGenerator, DefaultGenerationConfig
+from .cli import cli

@@ -28,6 +28,9 @@ vlm = [
     "pillow",
 ]
 
+[tool.poetry.scripts]
+simplegen = "simple_generation:cli"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
