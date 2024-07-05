@@ -94,8 +94,7 @@ def list_language_choices():
 
 DEFAULT_PROMPT_TEMPLATE = """Translate the following text from {src_lang_name} into {tgt_lang_name}.
 {src_lang_name}: {src_text}
-{tgt_lang_name}:
-"""
+{tgt_lang_name}:"""
 
 
 @cli.command()
@@ -104,7 +103,9 @@ DEFAULT_PROMPT_TEMPLATE = """Translate the following text from {src_lang_name} i
 )
 def translation(model_name_or_path):
 
-    generator = SimpleGenerator(model_name_or_path, torch_dtype=torch.bfloat16)
+    generator = SimpleGenerator(
+        model_name_or_path, torch_dtype=torch.bfloat16, device_map="auto"
+    )
 
     is_opus = "opus-mt" in model_name_or_path
     if is_opus:
@@ -166,6 +167,7 @@ def translation(model_name_or_path):
             src_lang,
             src_text,
             tgt_lang,
+            do_split_in_sentences,
             do_sample,
             num_beams,
             top_p,
@@ -177,6 +179,7 @@ def translation(model_name_or_path):
         ):
 
             texts = split_sentences(src_text) if do_split_in_sentences else src_text
+            texts = [t.strip() for t in texts if len(t)]
 
             if is_neither_opus_nor_nllb:
                 src_lang_name = Language.get(src_lang).display_name()
@@ -208,14 +211,13 @@ def translation(model_name_or_path):
 
             generation_kwargs.update(additional_generation_kwargs)
 
-            print(generation_kwargs)
-
             outputs = generator(
                 texts,
-                skip_prompt=False,
+                skip_prompt=True,
+                max_new_tokens=256,
                 batch_size="auto",
                 starting_batch_size=2,
-                **additional_generation_kwargs,
+                **generation_kwargs,
             )
 
             return " ".join(outputs)
@@ -262,6 +264,7 @@ def translation(model_name_or_path):
                     src_lang,
                     src_text,
                     tgt_lang,
+                    do_split_in_sentences,
                     do_sample,
                     num_beams,
                     top_p,
