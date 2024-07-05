@@ -18,6 +18,7 @@ pyopenssl = ">=23.2.0"
 optimum = ">=1.9.0"
 codecarbon = ">=2.1.4"
 scipy = ">=1.10.1"
+gradio = ">=4.37.2"
 pillow = { version = ">=10.3.0", optional = true }
 #transformers_stream_generator = { version = ">=0.0.5", optional = true }
 #torchvision = { version = ">=0.17.2", optional = true }

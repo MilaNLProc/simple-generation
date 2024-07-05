@@ -22,6 +22,7 @@ from transformers import (
 )
 
 from .utils import DistributedEvalSampler
+from .gui import build_gui
 
 logger = get_logger(__name__)
 
@@ -438,49 +439,9 @@ class SimpleGenerator:
             for t in texts
         ]
 
-    def gui(self, **generation_kwargs):
+    def gui(self, type: str = "chat", **generation_kwargs):
         """Start a GUI for the model."""
-        import gradio as gr
-        from transformers import TextIteratorStreamer
-        from threading import Thread
-
-        def _chat(message, history):
-            messages = list()
-            for user_prompt, model_response in history:
-                messages.append({"role": "user", "content": user_prompt})
-                messages.append({"role": "assistant", "content": model_response})
-            messages.append({"role": "user", "content": message})
-
-            tokenized_chat = self.tokenizer.apply_chat_template(
-                messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
-            ).to(self.device)
-
-            streamer = TextIteratorStreamer(
-                self.tokenizer, timeout=10.0, skip_prompt=True, skip_special_tokens=True
-            )
-            current_generation_args = self._prepare_generation_args(**generation_kwargs)
-
-            gen_args = dict(
-                inputs=tokenized_chat,
-                streamer=streamer,
-                **current_generation_args,
-            )
-
-            t = Thread(target=self.model.generate, kwargs=gen_args)
-            t.start()
-            partial_message = ""
-            for new_token in streamer:
-                if new_token != "<":
-                    partial_message += new_token
-                    yield partial_message
-
-        interface = gr.ChatInterface(
-            _chat,
-            # chatbot=gr.Chatbot(height=300),
-            title=f"Chat with {self.model_name_or_path.split('/')[-1]}",
-            description="Generation arguments: " + str(generation_kwargs),
-            # fill_vertical_space=True, # this needs an upcoming gradio release
-        )
+        interface = build_gui(type, self, **generation_kwargs)
         interface.launch()
 
 
