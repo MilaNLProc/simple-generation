@@ -145,11 +145,11 @@ def translation(model_name_or_path):
 
             # Parameters for modern LMs
             propmt_template = gr.Textbox(
-                label="Prompt template",
-                placeholder=DEFAULT_PROMPT_TEMPLATE,
+                label="Prompt template (specify {src_lang_name}, {tgt_lang_name}, {src_text})",
+                value=DEFAULT_PROMPT_TEMPLATE,
                 lines=3,
                 interactive=is_neither_opus_nor_nllb,
-                show_label=False,
+                show_label=True,
             )
             apply_chat_template = gr.Checkbox(
                 value=True,
@@ -183,8 +183,8 @@ def translation(model_name_or_path):
                 tgt_lang_name = Language.get(tgt_lang).display_name()
 
                 texts = [
-                    t.format(
-                        {
+                    prompt_template.format(
+                        **{
                             "src_lang_name": src_lang_name,
                             "tgt_lang_name": tgt_lang_name,
                             "src_text": t,
@@ -213,7 +213,8 @@ def translation(model_name_or_path):
             outputs = generator(
                 texts,
                 skip_prompt=False,
-                starting_batch_size=4,
+                batch_size="auto",
+                starting_batch_size=2,
                 **additional_generation_kwargs,
             )
 
@@ -266,6 +267,9 @@ def translation(model_name_or_path):
                     top_p,
                     top_k,
                     temperature,
+                    propmt_template,
+                    apply_chat_template,
+                    add_generation_prompt,
                 ],
                 outputs=[tgt_text],
             )
