@@ -4,7 +4,7 @@ from threading import Thread
 from dataclasses import dataclass
 from typing import Any, Dict
 import click
-from simple_generation import SimpleGenerator
+from simple_generation import SimpleGenerator, DefaultGenerationConfig
 import torch
 import re
 from langcodes.data_dicts import DEFAULT_SCRIPTS, LANGUAGE_ALPHA3
@@ -78,6 +78,11 @@ def split_sentences(text):
     return sentences
 
 
+def get_opus_langs(model_name_or_path):
+    langs = model_name_or_path.split("/")[-1].split("-")
+    return langs[-2], langs[-1]
+
+
 def prepare_generation(model_name_or_path, src_lang, tgt_lang, generator):
     additional_generation_kwargs = dict()
 
@@ -104,6 +109,11 @@ def translation(model_name_or_path):
 
     generator = SimpleGenerator(model_name_or_path, torch_dtype=torch.bfloat16)
 
+    is_opus = "opus-mt" in model_name_or_path
+    if is_opus:
+        opus_src_lang, opus_tgt_lang = get_opus_langs(model_name_or_path)
+        print(f"OPUS model detected: {opus_src_lang} -> {opus_tgt_lang}")
+
     with gr.Blocks() as demo:
         with gr.Row():
             gr.Markdown(
@@ -116,14 +126,47 @@ def translation(model_name_or_path):
 
         with gr.Accordion(label="Configuration", open=False):
             do_split_in_sentences = gr.Checkbox(value=True, label="Split in sentences.")
+            do_sample = gr.Checkbox(value=False, label="do_sample")
+            num_beams = gr.Number(value=1, label="num_beams", interactive=True)
+            top_p = gr.Slider(
+                value=0.9, label="top_p", minimum=0.1, maximum=1.0, interactive=True
+            )
+            top_k = gr.Number(value=50, label="top_k", interactive=True)
+            temperature = gr.Slider(
+                value=1.0,
+                label="temperature",
+                minimum=0.1,
+                maximum=2.0,
+                interactive=True,
+            )
 
-        def run_translation(src_lang, src_text, tgt_lang):
+        def run_translation(
+            src_lang,
+            src_text,
+            tgt_lang,
+            do_sample,
+            num_beams,
+            top_p,
+            top_k,
+            temperature,
+        ):
 
             texts = split_sentences(src_text) if do_split_in_sentences else src_text
 
             additional_generation_kwargs = prepare_generation(
                 model_name_or_path, src_lang, tgt_lang, generator
             )
+            generation_kwargs = {
+                "do_sample": do_sample,
+                "num_beams": num_beams,
+                "top_p": top_p,
+                "top_k": top_k,
+                "temperature": temperature,
+            }
+
+            generation_kwargs.update(additional_generation_kwargs)
+
+            print(generation_kwargs)
 
             outputs = generator(
                 texts,
@@ -139,9 +182,10 @@ def translation(model_name_or_path):
                 src_lang = gr.Dropdown(
                     label="src_lang",
                     choices=list_language_choices(),
-                    value="en",
+                    value=(opus_src_lang if is_opus else "en"),
                     show_label=False,
                     filterable=True,
+                    interactive=False if is_opus else True,
                 )
                 src_text = gr.Textbox(
                     label="src_text",
@@ -156,9 +200,10 @@ def translation(model_name_or_path):
                 tgt_lang = gr.Dropdown(
                     label="tgt_lang",
                     choices=list_language_choices(),
-                    value="it",
+                    value=(opus_tgt_lang if is_opus else "it"),
                     filterable=True,
                     show_label=False,
+                    interactive=False if is_opus else True,
                 )
                 tgt_text = gr.Textbox(
                     label="tgt_text",
@@ -170,7 +215,16 @@ def translation(model_name_or_path):
 
             btn.click(
                 run_translation,
-                inputs=[src_lang, src_text, tgt_lang],
+                inputs=[
+                    src_lang,
+                    src_text,
+                    tgt_lang,
+                    do_sample,
+                    num_beams,
+                    top_p,
+                    top_k,
+                    temperature,
+                ],
                 outputs=[tgt_text],
             )
 
