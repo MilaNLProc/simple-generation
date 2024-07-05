@@ -16,15 +16,6 @@ def cli():
     pass
 
 
-# def build_gui(type: str, generator, **generation_kwargs):
-#     if type == "chat":
-#         return ChatGUI(generator, generation_kwargs).build()
-#     elif type == "translation":
-#         return TranslationGUI(generator, generation_kwargs).build()
-#     else:
-#         raise ValueError(f"Unknown GUI type: {type}")
-
-
 # @dataclass
 # class ChatGUI:
 #     generator: Any
@@ -101,6 +92,12 @@ def list_language_choices():
     return [(Language.get(l).display_name(), l) for l in DEFAULT_SCRIPTS.keys()]
 
 
+DEFAULT_PROMPT_TEMPLATE = """Translate the following text from {src_lang_name} into {tgt_lang_name}.
+{src_lang_name}: {src_text}
+{tgt_lang_name}:
+"""
+
+
 @cli.command()
 @click.option(
     "--model_name_or_path", "-m", type=str, default="facebook/nllb-200-distilled-600M"
@@ -114,6 +111,10 @@ def translation(model_name_or_path):
         opus_src_lang, opus_tgt_lang = get_opus_langs(model_name_or_path)
         print(f"OPUS model detected: {opus_src_lang} -> {opus_tgt_lang}")
 
+    is_nllb = "nllb" in model_name_or_path
+
+    is_neither_opus_nor_nllb = (not is_opus) and (not is_nllb)
+
     with gr.Blocks() as demo:
         with gr.Row():
             gr.Markdown(
@@ -125,8 +126,10 @@ def translation(model_name_or_path):
             )
 
         with gr.Accordion(label="Configuration", open=False):
-            do_split_in_sentences = gr.Checkbox(value=True, label="Split in sentences.")
-            do_sample = gr.Checkbox(value=False, label="do_sample")
+            do_split_in_sentences = gr.Checkbox(
+                value=True, label="Split in sentences.", interactive=True
+            )
+            do_sample = gr.Checkbox(value=False, label="do_sample", interactive=True)
             num_beams = gr.Number(value=1, label="num_beams", interactive=True)
             top_p = gr.Slider(
                 value=0.9, label="top_p", minimum=0.1, maximum=1.0, interactive=True
@@ -140,6 +143,25 @@ def translation(model_name_or_path):
                 interactive=True,
             )
 
+            # Parameters for modern LMs
+            propmt_template = gr.Textbox(
+                label="Prompt template",
+                placeholder=DEFAULT_PROMPT_TEMPLATE,
+                lines=3,
+                interactive=is_neither_opus_nor_nllb,
+                show_label=False,
+            )
+            apply_chat_template = gr.Checkbox(
+                value=True,
+                label="apply_chat_template",
+                interactive=is_neither_opus_nor_nllb,
+            )
+            add_generation_prompt = gr.Checkbox(
+                value=True,
+                label="add_generation_prompt",
+                interactive=is_neither_opus_nor_nllb,
+            )
+
         def run_translation(
             src_lang,
             src_text,
@@ -149,9 +171,27 @@ def translation(model_name_or_path):
             top_p,
             top_k,
             temperature,
+            prompt_template,
+            apply_chat_template,
+            add_generation_prompt,
         ):
 
             texts = split_sentences(src_text) if do_split_in_sentences else src_text
+
+            if is_neither_opus_nor_nllb:
+                src_lang_name = Language.get(src_lang).display_name()
+                tgt_lang_name = Language.get(tgt_lang).display_name()
+
+                texts = [
+                    t.format(
+                        {
+                            "src_lang_name": src_lang_name,
+                            "tgt_lang_name": tgt_lang_name,
+                            "src_text": t,
+                        }
+                    )
+                    for t in texts
+                ]
 
             additional_generation_kwargs = prepare_generation(
                 model_name_or_path, src_lang, tgt_lang, generator
@@ -162,6 +202,8 @@ def translation(model_name_or_path):
                 "top_p": top_p,
                 "top_k": top_k,
                 "temperature": temperature,
+                "apply_chat_template": apply_chat_template,
+                "add_generation_prompt": add_generation_prompt,
             }
 
             generation_kwargs.update(additional_generation_kwargs)
