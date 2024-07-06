@@ -16,52 +16,122 @@ def cli():
     pass
 
 
-# @dataclass
-# class ChatGUI:
-#     generator: Any
-#     generation_kwargs: Dict
+@cli.command()
+@click.option("--model_name_or_path", "-m", type=str, default="google/gemma-2-9b-it")
+def chat(model_name_or_path):
+    generator = SimpleGenerator(
+        model_name_or_path, torch_dtype=torch.bfloat16, device_map="auto"
+    )
 
-#     def build(self):
-#         def _chat(message, history):
-#             messages = list()
-#             for user_prompt, model_response in history:
-#                 messages.append({"role": "user", "content": user_prompt})
-#                 messages.append({"role": "assistant", "content": model_response})
-#             messages.append({"role": "user", "content": message})
+    def _chat(
+        message,
+        history,
+        do_sample,
+        num_beams,
+        top_p,
+        top_k,
+        temperature,
+        max_new_tokens,
+        add_generation_prompt,
+    ):
+        messages = list()
+        for user_prompt, model_response in history:
+            messages.append({"role": "user", "content": user_prompt})
+            messages.append({"role": "assistant", "content": model_response})
+        messages.append({"role": "user", "content": message})
 
-#             tokenized_chat = self.tokenizer.apply_chat_template(
-#                 messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
-#             ).to(self.device)
+        tokenized_chat = generator.tokenizer.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=add_generation_prompt,
+            return_tensors="pt",
+        ).to(generator.device)
 
-#             streamer = TextIteratorStreamer(
-#                 self.tokenizer, timeout=10.0, skip_prompt=True, skip_special_tokens=True
-#             )
-#             current_generation_args = self._prepare_generation_args(
-#                 **self.generation_kwargs
-#             )
+        streamer = TextIteratorStreamer(
+            generator.tokenizer,
+            timeout=10.0,
+            skip_prompt=True,
+            skip_special_tokens=True,
+        )
+        current_generation_args = generator._prepare_generation_args(
+            do_sample=do_sample,
+            num_beams=num_beams,
+            top_p=top_p,
+            top_k=top_k,
+            temperature=temperature,
+            max_new_tokens=max_new_tokens,
+        )
 
-#             gen_args = dict(
-#                 inputs=tokenized_chat,
-#                 streamer=streamer,
-#                 **current_generation_args,
-#             )
+        # print("current_generation_args", current_generation_args)
+        gen_args = dict(
+            inputs=tokenized_chat,
+            streamer=streamer,
+            **current_generation_args,
+        )
 
-#             t = Thread(target=self.model.generate, kwargs=gen_args)
-#             t.start()
-#             partial_message = ""
-#             for new_token in streamer:
-#                 if new_token != "<":
-#                     partial_message += new_token
-#                     yield partial_message
+        t = Thread(target=generator.model.generate, kwargs=gen_args)
+        t.start()
+        partial_message = ""
+        for new_token in streamer:
+            if new_token != "<":
+                partial_message += new_token
+                yield partial_message
 
-#         interface = gr.ChatInterface(
-#             _chat,
-#             # chatbot=gr.Chatbot(height=300),
-#             title=f"Chat with {self.model_name_or_path.split('/')[-1]}",
-#             description="Generation arguments: " + str(self.generation_kwargs),
-#             # fill_vertical_space=True, # this needs an upcoming gradio release
-#         )
-#         return interface
+    with gr.Blocks() as interface:
+        with gr.Accordion(label="Configuration", open=False):
+            do_sample = gr.Checkbox(value=True, label="do_sample", interactive=True)
+            num_beams = gr.Number(value=1, label="num_beams", interactive=True)
+            top_p = gr.Slider(
+                value=0.9, label="top_p", minimum=0.1, maximum=1.0, interactive=True
+            )
+            top_k = gr.Number(value=100, label="top_k", interactive=True)
+            temperature = gr.Slider(
+                value=0.7,
+                label="temperature",
+                minimum=0.1,
+                maximum=2.0,
+                interactive=True,
+            )
+            max_new_tokens = gr.Number(
+                value=128, label="max_new_tokens", interactive=True
+            )
+
+            # Parameters for modern LMs
+            # propmt_template = gr.Textbox(
+            #     label="Prompt template (specify {src_lang_name}, {tgt_lang_name}, {src_text})",
+            #     value=DEFAULT_PROMPT_TEMPLATE,
+            #     lines=3,
+            #     interactive=is_neither_opus_nor_nllb,
+            #     show_label=True,
+            # )
+            # apply_chat_template = gr.Checkbox(
+            #     value=True,
+            #     label="apply_chat_template",
+            #     interactive=True,
+            # )
+            add_generation_prompt = gr.Checkbox(
+                value=True,
+                label="add_generation_prompt",
+                interactive=True,
+            )
+
+        gr.ChatInterface(
+            _chat,
+            # chatbot=gr.Chatbot(height=300),
+            title=f"Chat with {model_name_or_path.split('/')[-1]}",
+            additional_inputs=[
+                do_sample,
+                num_beams,
+                top_p,
+                top_k,
+                temperature,
+                max_new_tokens,
+                add_generation_prompt,
+            ],
+            # description="Generation arguments: " + str(self.generation_kwargs),
+            # fill_vertical_space=True, # this needs an upcoming gradio release
+        )
+    interface.launch()
 
 
 def split_sentences(text):
