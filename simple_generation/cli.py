@@ -77,7 +77,15 @@ def chat(model_name_or_path):
                 partial_message += new_token
                 yield partial_message
 
-    with gr.Blocks() as interface:
+    with gr.Blocks(fill_height=True) as interface:
+        gr.Markdown(
+            f"""
+                ## Simple Generation Chat Interface
+                        
+                Model: **{model_name_or_path}**
+            """
+        )
+
         with gr.Accordion(label="Configuration", open=False):
             do_sample = gr.Checkbox(value=True, label="do_sample", interactive=True)
             num_beams = gr.Number(value=1, label="num_beams", interactive=True)
@@ -96,19 +104,6 @@ def chat(model_name_or_path):
                 value=128, label="max_new_tokens", interactive=True
             )
 
-            # Parameters for modern LMs
-            # propmt_template = gr.Textbox(
-            #     label="Prompt template (specify {src_lang_name}, {tgt_lang_name}, {src_text})",
-            #     value=DEFAULT_PROMPT_TEMPLATE,
-            #     lines=3,
-            #     interactive=is_neither_opus_nor_nllb,
-            #     show_label=True,
-            # )
-            # apply_chat_template = gr.Checkbox(
-            #     value=True,
-            #     label="apply_chat_template",
-            #     interactive=True,
-            # )
             add_generation_prompt = gr.Checkbox(
                 value=True,
                 label="add_generation_prompt",
@@ -117,8 +112,9 @@ def chat(model_name_or_path):
 
         gr.ChatInterface(
             _chat,
-            # chatbot=gr.Chatbot(height=300),
-            title=f"Chat with {model_name_or_path.split('/')[-1]}",
+            # chatbot=gr.Chatbot(
+            #     show_copy_button=True, render_markdown=True, bubble_full_width=False
+            # ),
             additional_inputs=[
                 do_sample,
                 num_beams,
@@ -128,8 +124,6 @@ def chat(model_name_or_path):
                 max_new_tokens,
                 add_generation_prompt,
             ],
-            # description="Generation arguments: " + str(self.generation_kwargs),
-            # fill_vertical_space=True, # this needs an upcoming gradio release
         )
     interface.launch()
 
