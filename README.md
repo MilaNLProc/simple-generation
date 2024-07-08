@@ -34,7 +34,7 @@ pip install "simple-generation[vlm]"
 - carbon emission estimates using [codecarbon](https://mlco2.github.io/codecarbon/)
 - sparsity and fused kernels for speed with [optimum](https://huggingface.co/docs/optimum/main/en/index) (`use_bettertransformer=True`)
 - DDP for single-node, multi-gpu setups using [accelerate](https://github.com/huggingface/accelerate). See [Distributed Inference](#distributed-inference)
-- GUI for quick interaction with models using Gradio's [ChatInterface](https://www.gradio.app/guides/creating-a-chatbot-fast#customizing-your-chatbot). See [Chat Interface](#chat-interface)
+- GUI for quick interaction with models. See [GUI](#GUI)
 
 **Vision-Language Models**
 
@@ -140,23 +140,18 @@ You can also enable the generation prompt by setting `add_generation_prompt=True
 
 **Note: chat templates are not enabled by default!**
 
-### Chat Interface
+### GUI
 
-The main SimpleGenerator class exposes the method `gui()`. If invoked, it fires up a local chat interface to interact with the model.
-Note that, since everything will run locally, you can fill up your VRAM quite easily with long chats. Keep an eye on your VRAM usage and clean the chat frequently -- you might notice that memory does not get freed up immediately, but cleaning the chat will reuse the already allocated memory for new chats.
+When installed, Simple Generation exposes a basic command line interface (`simplegen`) to fire up quick web apps.
 
+We currently support:
 
-```python
-model_name = "mistralai/Mistral-7B-Instruct-v0.2"
-generator = SimpleGenerator(model_name, torch_dtype=torch.bfloat16, device="cuda:0")
+- Chat Interface: by calling `simplegen chat`. Note that, since **everything will run locally**, you can fill up your VRAM quite easily with long chats. Keep an eye on your VRAM usage and clean the chat frequently -- you might notice that memory does not get freed up immediately, but cleaning the chat will reuse the already allocated memory for new chats.
+- Traslation Interface: by calling `simplegen translation`. Note that for Opus MT models the choice of source and target languages is not available/
 
-generator.gui(
-    do_sample=True,
-    max_new_tokens=256,
-    temperature=0.8,
-    top_p=0.85,
-    top_k=50,
-)
+Example
+```bash
+simplegen chat -m google/gemma-2-9b-it
 ```
 
 ### Simple Translation
