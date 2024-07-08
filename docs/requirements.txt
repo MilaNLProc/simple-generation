@@ -15,4 +15,5 @@ sphinx-favicon>=1.0.1
 pydata_sphinx_theme>=0.12.0
 pillow>=10.3.0
 gradio>=4.37.2
+langcodes>=3.4.0
 
