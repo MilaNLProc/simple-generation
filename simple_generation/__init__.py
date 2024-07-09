@@ -2,7 +2,7 @@
 
 __author__ = """Giuseppe Attanasio"""
 __email__ = "giuseppeattanasio6@gmail.com"
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 
 from .simple_generation import SimpleGenerator, DefaultGenerationConfig
