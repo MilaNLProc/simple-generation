@@ -376,7 +376,7 @@ class SimpleGenerator:
                     )
 
                     # remove initial text prompt from responses
-                    if skip_prompt:
+                    if skip_prompt and not self.is_encoder_decoder:
                         output = output[:, len(batch["input_ids"][0]) :]
 
                     decoded = self.tokenizer.batch_decode(

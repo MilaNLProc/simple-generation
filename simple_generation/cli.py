@@ -163,22 +163,32 @@ DEFAULT_PROMPT_TEMPLATE = """Translate the following text from {src_lang_name} i
 
 @cli.command()
 @click.option(
-    "--model_name_or_path", "-m", type=str, default="facebook/nllb-200-distilled-600M"
+    "--model_name_or_path",
+    "-m",
+    type=str,
+    default="facebook/nllb-200-distilled-600M",
+    help="Model name or path.",
 )
-def translation(model_name_or_path):
+@click.option(
+    "--device",
+    "-d",
+    type=str,
+    default="auto",
+    help="Device to use for inference. Default: auto (sets HF's device_map to 'auto').",
+)
+def translation(model_name_or_path, device):
 
-    generator = SimpleGenerator(
-        model_name_or_path, torch_dtype=torch.bfloat16, device_map="auto"
-    )
-
+    # Manually handle how OpusMT and NLLB models are configured
     is_opus = "opus-mt" in model_name_or_path
     if is_opus:
         opus_src_lang, opus_tgt_lang = get_opus_langs(model_name_or_path)
         print(f"OPUS model detected: {opus_src_lang} -> {opus_tgt_lang}")
-
     is_nllb = "nllb" in model_name_or_path
-
     is_neither_opus_nor_nllb = (not is_opus) and (not is_nllb)
+
+    generator = SimpleGenerator(
+        model_name_or_path, torch_dtype=torch.bfloat16, device_map=device
+    )
 
     with gr.Blocks() as demo:
         with gr.Row():
@@ -213,18 +223,21 @@ def translation(model_name_or_path):
                 label="Prompt template (specify {src_lang_name}, {tgt_lang_name}, {src_text})",
                 value=DEFAULT_PROMPT_TEMPLATE,
                 lines=3,
-                interactive=is_neither_opus_nor_nllb,
+                interactive=True,
                 show_label=True,
+                visible=is_neither_opus_nor_nllb,
             )
             apply_chat_template = gr.Checkbox(
-                value=True,
+                value=is_neither_opus_nor_nllb,
                 label="apply_chat_template",
-                interactive=is_neither_opus_nor_nllb,
+                interactive=True,
+                visible=is_neither_opus_nor_nllb,
             )
             add_generation_prompt = gr.Checkbox(
-                value=True,
+                value=is_neither_opus_nor_nllb,
                 label="add_generation_prompt",
-                interactive=is_neither_opus_nor_nllb,
+                interactive=True,
+                visible=is_neither_opus_nor_nllb,
             )
 
         def run_translation(
