@@ -18,9 +18,10 @@ def cli():
 
 @cli.command()
 @click.option("--model_name_or_path", "-m", type=str, default="google/gemma-2-9b-it")
-def chat(model_name_or_path):
+@click.option("--lora_weights", "-l", type=str, default=None)
+def chat(model_name_or_path, lora_weights):
     generator = SimpleGenerator(
-        model_name_or_path, torch_dtype=torch.bfloat16, device_map="auto"
+        model_name_or_path, torch_dtype=torch.bfloat16, device_map="auto", lora_weights=lora_weights
     )
 
     def _chat(

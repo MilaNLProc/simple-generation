@@ -193,13 +193,15 @@ class SimpleGenerator:
         print(
             f"""
             Simple Generation initialization completed!
-
-            Model placement:
+            
+            Model:
+            - hub_id: {model_name_or_path},
+            - torch_dtype: {self.model.dtype},
             - device_map: {model_kwargs.pop('device_map', None)},
             - device: {self.device},
 
             DDP:
-            - distributed inference: {self.is_ddp},
+            - running with distributed inference: {self.is_ddp},
 
             Model info:
             - is_encoder_decoder: {self.is_encoder_decoder},
