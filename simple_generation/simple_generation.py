@@ -440,7 +440,8 @@ class SimpleGenerator:
 
         if sort_prompts_by_length:
             # Reorder the responses to match the original order
-            responses = [responses[i[0]] for i in idx2text_mapping]
+            new_responses = [responses[i[0]] for i in idx2text_mapping]
+            responses = new_responses
 
         return responses
 
