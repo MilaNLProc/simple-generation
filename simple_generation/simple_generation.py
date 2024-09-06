@@ -344,6 +344,10 @@ class SimpleGenerator:
             )
             text_inputs = [text for _, text in idx2text_mapping]
 
+        import pdb
+
+        pdb.set_trace()
+
         # Processing the input text
         dataset = Dataset.from_dict({"text": text_inputs})
         dataset = dataset.map(
@@ -440,7 +444,9 @@ class SimpleGenerator:
 
         if sort_prompts_by_length:
             # Reorder the responses to match the original order
-            new_responses = [responses[i[0]] for i in idx2text_mapping]
+            new_responses = [None] * len(texts)
+            for (idx, _), response in zip(idx2text_mapping, responses):
+                new_responses[idx] = response
             responses = new_responses
 
         return responses
