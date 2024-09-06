@@ -344,10 +344,6 @@ class SimpleGenerator:
             )
             text_inputs = [text for _, text in idx2text_mapping]
 
-        import pdb
-
-        pdb.set_trace()
-
         # Processing the input text
         dataset = Dataset.from_dict({"text": text_inputs})
         dataset = dataset.map(
