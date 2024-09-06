@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "simple-generation"
-version = "0.5.1"
+version = "0.6.0"
 description = "A python package to run inference with HuggingFace checkpoints wrapping many convenient features."
 authors = ["Giuseppe Attanasio <giuseppeattanasio6@gmail.com>"]
 license = "Apache Software License 2.0"
@@ -8,7 +8,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-transformers = ">=4.41.0"
+transformers = "^4.41.2"
 tokenizers = ">=0.13.3"
 accelerate = ">=0.20.3"
 datasets = ">=2.12.0"
@@ -18,8 +18,8 @@ pyopenssl = ">=23.2.0"
 optimum = ">=1.9.0"
 codecarbon = ">=2.1.4"
 scipy = ">=1.10.1"
-gradio = { version = ">=4.37.2", optional = true }
-langcodes = { version = ">=3.4.0", optional = true }
+gradio = "^4.37.2"
+langcodes = "^3.4.0"
 pillow = { version = ">=10.3.0", optional = true }
 
 #transformers_stream_generator = { version = ">=0.0.5", optional = true }
@@ -28,9 +28,6 @@ pillow = { version = ">=10.3.0", optional = true }
 [tool.poetry.extras]
 vlm = [
     "pillow",
-]
-gui = [
-    "gradio", "langcodes"
 ]
 all = [
     "pillow", "gradio", "langcodes"

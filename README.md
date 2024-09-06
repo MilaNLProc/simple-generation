@@ -18,12 +18,9 @@ Install:
 pip install simple-generation
 ```
 
-We support additional functionalities such as inference with Vision Language Models (VLMs) and the creation of quick web interfaces to interact with models (GUIs). Install them with `vlm|gui|all`:
+We support additional functionalities such as inference with Vision Language Models (VLMs) and the creation of quick web interfaces to interact with models (GUIs). Install them with `vlm|all`:
 ```bash
 pip install simple-generation[vlm]
-
-# or
-pip install simple-generation[gui]
 
 # or
 pip install simple-generation[all]
@@ -34,6 +31,7 @@ pip install simple-generation[all]
 - generate with any model that can be loaded with `AutoModelForCausalLM` or `AutoModelForSeq2SeqLM`
 - batched inference for speed (`batch_size=256`)
 - auto find the largest batch size fitting in your accelerator (`batch_size="auto"`, `starting_batch_size=512`)
+- sorting inputs by length to reduce padding tokens and improve speed (`sort_prompts_by_length=True` in `__call__`)
 - torch.compile the model for speed (`compile_model=True`)
 - load and attach LoRA weights (`lora_weights=...`)
 - chat templates for modern chat models (`apply_chat_template=True` in `__call__`)

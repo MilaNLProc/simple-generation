@@ -1,7 +1,7 @@
 """Main module."""
 
 import dataclasses
-from typing import List, Dict
+from typing import List, Dict, Union, Optional, Mapping, Any
 
 import torch
 import torch.distributed as dist
@@ -20,9 +20,6 @@ from transformers import (
     DataCollatorWithPadding,
     GenerationConfig,
 )
-import gradio as gr
-from transformers import TextIteratorStreamer
-from threading import Thread
 
 from .utils import DistributedEvalSampler
 
@@ -285,17 +282,18 @@ class SimpleGenerator:
     @inference_decorator()
     def __call__(
         self,
-        texts,
-        batch_size="auto",
-        starting_batch_size=256,
-        num_workers=4,
-        skip_prompt=False,
-        log_batch_sample=-1,
-        show_progress_bar=True,
-        prepare_prompts=False,  # keeping it here for consistency
-        apply_chat_template=False,
-        add_generation_prompt=False,
-        **generation_kwargs,
+        texts: List[str],
+        batch_size: Union[str, int] = "auto",
+        starting_batch_size: Optional[int] = 256,
+        num_workers: Optional[int] = 4,
+        show_progress_bar: Optional[bool] = True,
+        skip_prompt: Optional[bool] = False,
+        log_batch_sample: Optional[int] = -1,
+        apply_chat_template: Optional[bool] = False,
+        add_generation_prompt: Optional[bool] = False,
+        sort_prompts_by_length: Optional[bool] = False,
+        prepare_prompts: Optional[bool] = False,  # keeping it here for consistency
+        **generation_kwargs: Mapping[str, Any],
     ):
         """Generate text from a given prompt.
 
@@ -309,6 +307,7 @@ class SimpleGenerator:
             show_progress_bar (bool, optional): Whether to show the progress bar. Defaults to True.
             apply_chat_template (bool, optional): Whether to apply the chat template to the prompts. Defaults to False.
             add_generation_prompt (bool, optional): Whether to add the generation prompt to the prompts. Defaults to False.
+            sort_prompts_by_length (bool, optional): Whether to sort the prompts by length before generating. Since we pad batches dinamically, sorting inputs results in a reduced use of padding tokens and faster inference. Defaults to False.
             **generation_kwargs: Any other keyword arguments will be passed to the model's generate() method.
 
         Returns:
@@ -337,8 +336,16 @@ class SimpleGenerator:
         current_generation_args = self._prepare_generation_args(**generation_kwargs)
         logger.debug("Generation args:", current_generation_args)
 
+        text_inputs = texts
+        if sort_prompts_by_length:
+            # Sort texts by decreasing length and keep the original indices
+            idx2text_mapping = sorted(
+                enumerate(texts), key=lambda x: len(x[1]), reverse=True
+            )
+            text_inputs = [text for _, text in idx2text_mapping]
+
         # Processing the input text
-        dataset = Dataset.from_dict({"text": texts})
+        dataset = Dataset.from_dict({"text": text_inputs})
         dataset = dataset.map(
             lambda x: self.tokenizer(x["text"], truncation=True),
             batched=True,
@@ -430,6 +437,10 @@ class SimpleGenerator:
             responses = find_batch_size_loop()
         else:
             responses = base_loop(batch_size)
+
+        if sort_prompts_by_length:
+            # Reorder the responses to match the original order
+            responses = [responses[i[0]] for i in idx2text_mapping]
 
         return responses
 
