@@ -22,8 +22,17 @@ from transformers import (
 )
 
 from .utils import DistributedEvalSampler
+from logging import getLogger
 
-logger = get_logger(__name__)
+# logger = get_logger(__name__)
+logger = getLogger(__name__)
+
+try:
+    from vllm import LLM, SamplingParams
+except ImportError:
+    logger.warning(
+        "Could not import VLLM. Make sure you have the vllm package installed."
+    )
 
 
 inference_decorator = (
@@ -51,6 +60,15 @@ class SimpleGenerator:
         """Returns True if the process is the main process."""
         return self.accelerator.is_main_process
 
+    @property
+    def tokenizer(self):
+        """Returns the tokenizer."""
+        return (
+            self._tokenizer
+            if self.engine == "transformers"
+            else self.model.llm_engine.tokenizer.tokenizer
+        )
+
     def __init__(
         self,
         model_name_or_path,
@@ -58,6 +76,7 @@ class SimpleGenerator:
         lora_weights=None,
         compile_model=False,
         use_bettertransformer=False,
+        engine: str = "transformers",
         **model_kwargs,
     ):
         """Initialize the SimpleGenerator.
@@ -78,16 +97,7 @@ class SimpleGenerator:
             >>> generator = SimpleGenerator("meta-llama/Llama-2-7b-chat-hf", apply_chat_template=True)
         """
         self.model_name_or_path = model_name_or_path
-
-        # Use accelerator to distribute model if DDP is enabled
-        self.accelerator = Accelerator(device_placement=True)
-        self.device = self.accelerator.device
-        user_request_move_to_device = False
-
-        if "device" in model_kwargs:
-            logger.info(f"Setting device to {self.device} per user's request.")
-            self.device = model_kwargs.pop("device")
-            user_request_move_to_device = True
+        self.engine = engine
 
         # Load config and inspect whether the model is a seq2seq or causal LM
         config = None
@@ -96,6 +106,7 @@ class SimpleGenerator:
             config = AutoConfig.from_pretrained(
                 model_name_or_path, trust_remote_code=trust_remote_code
             )
+            self.config = config
 
             if config.architectures == "LLaMAForCausalLM":
                 logger.warning(
@@ -110,8 +121,6 @@ class SimpleGenerator:
                 )
                 is_encoder_decoder = False
 
-            model_kwargs["config"] = config
-
         except:
             logger.warning(
                 f"Could not find config in {model_name_or_path}. Assuming it's an autoregressive model."
@@ -120,7 +129,66 @@ class SimpleGenerator:
 
         self.is_encoder_decoder = is_encoder_decoder
 
-        if is_encoder_decoder:
+        if engine == "transformers":
+            (
+                self._init_transformers(
+                    model_name_or_path,
+                    tokenizer_name_or_path,
+                    lora_weights,
+                    compile_model,
+                    use_bettertransformer,
+                    **model_kwargs,
+                )
+            )
+        elif engine == "vllm":
+            self._init_vllm(model_name_or_path, **model_kwargs)
+        else:
+            raise ValueError(f"Engine {engine} not supported.")
+
+        print(
+            f"""
+            Simple Generation initialization completed!
+            
+            Model:
+            - hub_id: {model_name_or_path},
+            - engine: {engine},
+            - torch_dtype: {getattr(self.model, "dtype", None)},
+            - device_map: {model_kwargs.pop('device_map', None)},
+            - device: {getattr(self, "device", None)},
+
+            DDP:
+            - running with distributed inference: {self.is_ddp},
+
+            Model info:
+            - is_encoder_decoder: {self.is_encoder_decoder},
+            - lora_weights: {lora_weights},
+            - use_bettertransformer: {use_bettertransformer},
+            - compile_model: {compile_model}
+            """
+        )
+
+    def _init_transformers(
+        self,
+        model_name_or_path,
+        tokenizer_name_or_path,
+        lora_weights,
+        compile_model,
+        use_bettertransformer,
+        **model_kwargs,
+    ) -> None:
+        # Use accelerator to distribute model if DDP is enabled
+        self.accelerator = Accelerator(device_placement=True)
+        self.device = self.accelerator.device
+        user_request_move_to_device = False
+
+        model_kwargs["config"] = self.config
+
+        if "device" in model_kwargs:
+            logger.info(f"Setting device to {self.device} per user's request.")
+            self.device = model_kwargs.pop("device")
+            user_request_move_to_device = True
+
+        if self.is_encoder_decoder:
             model_cls = AutoModelForSeq2SeqLM
         else:
             model_cls = AutoModelForCausalLM
@@ -128,8 +196,8 @@ class SimpleGenerator:
         tokenizer_name = (
             tokenizer_name_or_path if tokenizer_name_or_path else model_name_or_path
         )
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_name, config=config, padding_side="left"
+        self._tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer_name, config=self.config, padding_side="left"
         )
 
         # padding_size="left" is required for autoregressive models, and should not make a difference for every other model as we use attention_masks. See: https://github.com/huggingface/transformers/issues/3021#issuecomment-1454266627 for a discussion on why left padding is needed on batched inference
@@ -187,26 +255,8 @@ class SimpleGenerator:
 
         self.model.eval()
 
-        print(
-            f"""
-            Simple Generation initialization completed!
-            
-            Model:
-            - hub_id: {model_name_or_path},
-            - torch_dtype: {self.model.dtype},
-            - device_map: {model_kwargs.pop('device_map', None)},
-            - device: {self.device},
-
-            DDP:
-            - running with distributed inference: {self.is_ddp},
-
-            Model info:
-            - is_encoder_decoder: {self.is_encoder_decoder},
-            - lora_weights: {lora_weights},
-            - use_bettertransformer: {use_bettertransformer},
-            - compile_model: {compile_model}
-            """
-        )
+    def _init_vllm(self, model_name_or_path, **model_kwargs):
+        self.model = LLM(model=model_name_or_path, **model_kwargs)
 
     def conversation_from_user_prompts(
         self,
@@ -283,16 +333,19 @@ class SimpleGenerator:
     def __call__(
         self,
         texts: List[str],
+        # chat templates
+        apply_chat_template: Optional[bool] = False,
+        add_generation_prompt: Optional[bool] = False,
+        # params for inference with transformers
         batch_size: Union[str, int] = "auto",
         starting_batch_size: Optional[int] = 256,
         num_workers: Optional[int] = 4,
         show_progress_bar: Optional[bool] = True,
         skip_prompt: Optional[bool] = False,
         log_batch_sample: Optional[int] = -1,
-        apply_chat_template: Optional[bool] = False,
-        add_generation_prompt: Optional[bool] = False,
         sort_prompts_by_length: Optional[bool] = False,
         prepare_prompts: Optional[bool] = False,  # keeping it here for consistency
+        # all remaining params are used for transformers + vllm
         **generation_kwargs: Mapping[str, Any],
     ):
         """Generate text from a given prompt.
@@ -332,6 +385,14 @@ class SimpleGenerator:
 
         if apply_chat_template:
             texts = self._apply_chat_template_user(texts, add_generation_prompt)
+
+        if self.engine == "vllm":
+            logger.info("Using VLLM for generation.")
+            sampling_params = SamplingParams(**generation_kwargs)
+            outputs = self.model.generate(texts, sampling_params)
+            outputs = [o.outputs[0].text for o in outputs]
+
+            return outputs
 
         current_generation_args = self._prepare_generation_args(**generation_kwargs)
         logger.debug("Generation args:", current_generation_args)
