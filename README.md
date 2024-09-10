@@ -29,6 +29,7 @@ pip install simple-generation[all]
 ## Features
 
 - generate with any model that can be loaded with `AutoModelForCausalLM` or `AutoModelForSeq2SeqLM`
+- pre-tokenization and dynamic padding for speed
 - batched inference for speed (`batch_size=256`)
 - auto find the largest batch size fitting in your accelerator (`batch_size="auto"`, `starting_batch_size=512`)
 - sorting inputs by length to reduce padding tokens and improve speed (`sort_prompts_by_length=True` in `__call__`)
